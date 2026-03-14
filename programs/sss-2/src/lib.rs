@@ -1,599 +1,240 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_2022::{self, MintTo, Burn, Transfer, Token2022};
-use anchor_spl::token_interface::{Mint, TokenAccount};
-use anchor_spl::associated_token::AssociatedToken;
-use spl_token_2022::extension::{
-    ExtensionType,
-    metadata_pointer::MetadataPointer,
-    permanent_delegate::PermanentDelegate,
-    transfer_hook::TransferHook,
-    transfer_fee::TransferFeeConfig, // New import
-    interest_bearing::InterestBearingConfig, // New import
+use anchor_lang::system_program::System;
+use anchor_lang::solana_program::program::invoke_signed;
+use spl_transfer_hook_interface::instruction::ExecuteInstruction;
+use spl_tlv_account_resolution::{
+    account::ExtraAccountMeta,
+    seeds::Seed,
+    state::ExtraAccountMetaList,
 };
-use spl_token_metadata_interface::{
-    state::TokenMetadata,
-    instruction::initialize as initialize_metadata_instruction,
-};
+use spl_discriminator::discriminator::SplDiscriminate;
 
-pub mod state;
-pub mod constants;
 pub mod error;
-pub mod math; // For mul_div and rounding
+use error::HookError;
 
-use state::*;
-use error::*;
-use constants::*;
-use math::*; // Import math functions
+declare_id!("8DMsf39fGWfcrWVjfyEq8fqZf5YcTvVPGgdJr8s2S8Nc");
 
-declare_id!("3gam4baZf4JJFAZBQY7UEekJ7YgSL9GNDWYQrz1Qxe1T");
+pub const EXTRA_ACCOUNT_METAS_SEED: &[u8] = b"extra-account-metas";
 
 #[program]
-pub mod sss_2 {
+pub mod sss_transfer_hook {
     use super::*;
 
-    pub fn initialize(
-        ctx: Context<Initialize>,
-        decimals: u8,
-        name: String,
-        symbol: String,
-        uri: String,
-        transfer_fee_basis_points: u16,
-        maximum_fee: u64,
-        interest_rate_bps: u16,
+    /// Initialize the ExtraAccountMetaList PDA.
+    /// Defines which extra accounts Token-2022 must include on every transfer CPI.
+    ///
+    /// Extra account layout (Execute instruction accounts):
+    ///   [0] source token account
+    ///   [1] mint
+    ///   [2] destination token account
+    ///   [3] authority (source wallet owner)
+    ///   [4] ExtraAccountMetaList PDA
+    ///   --- extra accounts ---
+    ///   [5] sss-token program ID (for PDA derivation)
+    ///   [6] stablecoin state PDA: seeds=[b"stablecoin", mint(1)] under program(5)
+    ///   [7] source blacklist PDA: seeds=[b"blacklist", stablecoin(6), authority(3)] under program(5)
+    ///   [8] dest blacklist PDA:   seeds=[b"blacklist", stablecoin(6), dest_owner_from_data(2,32,32)] under program(5)
+    pub fn initialize_extra_account_meta_list(
+        ctx: Context<InitializeExtraAccountMetas>,
+        sss_token_program_id: Pubkey,
     ) -> Result<()> {
-        let stablecoin = &mut ctx.accounts.stablecoin;
-        stablecoin.authority = ctx.accounts.authority.key();
-        stablecoin.mint = ctx.accounts.mint.key();
-        stablecoin.collateral_vault = ctx.accounts.collateral_vault.key();
-        stablecoin.total_assets = 0; // Starts at zero
-        stablecoin.decimals = decimals;
-        stablecoin.paused = false;
-        stablecoin.bump = ctx.bumps.stablecoin;
+        // Order matters: each account can only reference earlier accounts.
+        let extra_account_metas = vec![
+            // [5] sss-token program ID (literal, no dependencies)
+            ExtraAccountMeta::new_with_pubkey(&sss_token_program_id, false, false)?,
 
-        let stablecoin_key = stablecoin.key(); // The stablecoin PDA is the authority for the mint
-        let seeds: &[&[&[u8]]] = &[&[
-            STABLECOIN_SEED,
-            ctx.accounts.mint.key().as_ref(), // Use the mint key for PDA derivation
-            &[ctx.bumps.stablecoin],
-        ]];
-        let signer_seeds = &[&seeds[0][..]];
+            // [6] Stablecoin state PDA: seeds=[b"stablecoin", mint_key]
+            //     External PDA owned by sss-token program (index 5)
+            ExtraAccountMeta::new_external_pda_with_seeds(
+                5, // program at index 5
+                &[
+                    Seed::Literal { bytes: b"stablecoin".to_vec() },
+                    Seed::AccountKey { index: 1 }, // mint
+                ],
+                false,
+                false,
+            )?,
 
-        // Initialize Transfer Fee Config (Explicitly via CPI)
-        let transfer_fee_ix = spl_token_2022::instruction::initialize_transfer_fee_config(
-            &ctx.accounts.token_program.key(),
-            &ctx.accounts.mint.key(),
-            Some(&stablecoin_key),
-            Some(&stablecoin_key),
-            transfer_fee_basis_points,
-            maximum_fee,
-        )?;
+            // [7] Source blacklist entry PDA: seeds=[b"blacklist", stablecoin_key, source_authority]
+            //     May or may not exist; if it does, source is blacklisted
+            ExtraAccountMeta::new_external_pda_with_seeds(
+                5,
+                &[
+                    Seed::Literal { bytes: b"blacklist".to_vec() },
+                    Seed::AccountKey { index: 6 }, // stablecoin state
+                    Seed::AccountKey { index: 3 }, // authority (source wallet)
+                ],
+                false,
+                false,
+            )?,
 
-        solana_program::program::invoke_signed(
-            &transfer_fee_ix,
-            &[
-                ctx.accounts.mint.to_account_info(),
-                ctx.accounts.token_program.to_account_info(),
-            ],
-            signer_seeds,
-        )?;
+            // [8] Destination blacklist entry PDA: seeds=[b"blacklist", stablecoin_key, dest_owner]
+            //     dest_owner extracted from destination token account data bytes 32..64
+            ExtraAccountMeta::new_external_pda_with_seeds(
+                5,
+                &[
+                    Seed::Literal { bytes: b"blacklist".to_vec() },
+                    Seed::AccountKey { index: 6 }, // stablecoin state
+                    Seed::AccountData { account_index: 2, data_index: 32, length: 32 }, // dest owner
+                ],
+                false,
+                false,
+            )?,
+        ];
 
-        // Initialize Interest Bearing Config (Explicitly via CPI)
-        let interest_bearing_ix = spl_token_2022::instruction::interest_bearing::initialize_interest_bearing_mint(
-            &ctx.accounts.token_program.key(),
-            &ctx.accounts.mint.key(),
-            Some(&stablecoin_key),
-            interest_rate_bps,
-        )?;
-        
-        solana_program::program::invoke_signed(
-            &interest_bearing_ix,
-            &[
-                ctx.accounts.mint.to_account_info(),
-                ctx.accounts.token_program.to_account_info(),
-            ],
-            signer_seeds,
-        )?;
+        // Calculate required account size
+        let account_size = ExtraAccountMetaList::size_of(extra_account_metas.len())?;
+        let lamports = Rent::get()?.minimum_balance(account_size);
 
-        // Initialize metadata for the mint
-        let cpi_accounts = ctx.accounts.token_metadata_program.to_account_info();
-        let mint_info = ctx.accounts.mint.to_account_info();
-        let system_program_info = ctx.accounts.system_program.to_account_info();
-        let rent_info = ctx.accounts.rent.to_account_info();
-
-        // Instruction to initialize metadata
-        let initialize_metadata_ix = initialize_metadata_instruction(
-            &ctx.accounts.token_metadata_program.key(), // Token Metadata Program ID
-            &mint_info.key(), // Mint Account
-            &stablecoin_key, // Mint Authority
-            &stablecoin_key, // Freeze Authority (can be same as mint authority)
-            name,
-            symbol,
-            uri,
+        // Derive PDA bump for signing
+        let mint_key = ctx.accounts.mint.key();
+        let (_, bump) = Pubkey::find_program_address(
+            &[EXTRA_ACCOUNT_METAS_SEED, mint_key.as_ref()],
+            &crate::ID,
         );
 
-        solana_program::program::invoke_signed(
-            &initialize_metadata_ix,
+        // Create the ExtraAccountMetaList account (PDA must sign)
+        invoke_signed(
+            &anchor_lang::solana_program::system_instruction::create_account(
+                &ctx.accounts.authority.key(),
+                &ctx.accounts.extra_account_meta_list.key(),
+                lamports,
+                account_size as u64,
+                &crate::ID,
+            ),
             &[
-                cpi_accounts.clone(),
-                mint_info.clone(),
-                ctx.accounts.stablecoin.to_account_info(), // Mint Authority
-                ctx.accounts.stablecoin.to_account_info(), // Freeze Authority
-                system_program_info.clone(), // System Program (needed for CPI)
-                rent_info.clone(), // Rent Sysvar (needed for CPI)
+                ctx.accounts.authority.to_account_info(),
+                ctx.accounts.extra_account_meta_list.to_account_info(),
             ],
-            signer_seeds,
-        )?;
-        Ok(())
-    }
-
-    pub fn sync(ctx: Context<Sync>) -> Result<()> {
-        require!(!ctx.accounts.stablecoin.paused, StablecoinErrorV2::Paused);
-        ctx.accounts.stablecoin.total_assets = ctx.accounts.collateral_vault.amount;
-        Ok(())
-    }
-
-    pub fn deposit(ctx: Context<Deposit>, assets: u64, min_shares_out: u64) -> Result<()> {
-        require!(!ctx.accounts.stablecoin.paused, StablecoinErrorV2::Paused);
-        require!(assets > 0, StablecoinErrorV2::ZeroAmount);
-
-        let stablecoin = &mut ctx.accounts.stablecoin;
-        let mint = &ctx.accounts.mint;
-        let collateral_vault = &ctx.accounts.collateral_vault;
-
-        let total_supply = mint.supply;
-        let total_assets = stablecoin.total_assets;
-
-        let shares_out = if total_supply == 0 || total_assets == 0 {
-            assets
-        } else {
-            // Apply virtual offset and vault-favoring rounding (floor)
-            mul_div(
-                assets,
-                total_supply.checked_add(VIRTUAL_OFFSET).ok_or(StablecoinErrorV2::MathOverflow)?,
-                total_assets.checked_add(1).ok_or(StablecoinErrorV2::MathOverflow)?,
-                Rounding::Floor,
-            ).ok_or(StablecoinErrorV2::MathOverflow)?
-        };
-
-        require!(shares_out >= min_shares_out, StablecoinErrorV2::SlippageExceeded);
-        require!(shares_out > 0, StablecoinErrorV2::ZeroAmount);
-
-        // Transfer assets to collateral vault
-        let cpi_accounts = Transfer {
-            from: ctx.accounts.user_collateral_ata.to_account_info(),
-            to: collateral_vault.to_account_info(),
-            authority: ctx.accounts.authority.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-        token_2022::transfer(cpi_ctx, assets)?;
-
-        // Update total assets in stablecoin state
-        stablecoin.total_assets = stablecoin.total_assets.checked_add(assets).ok_or(StablecoinErrorV2::MathOverflow)?;
-
-        // Mint shares to user
-        let mint_key = stablecoin.mint;
-        let stablecoin_seeds: &[&[&[u8]]] = &[&[
-            STABLECOIN_SEED,
-            mint_key.as_ref(),
-            &[stablecoin.bump],
-        ]];
-
-        let cpi_accounts = MintTo {
-            mint: mint.to_account_info(),
-            to: ctx.accounts.user_shares_ata.to_account_info(),
-            authority: stablecoin.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, stablecoin_seeds);
-        token_2022::mint_to(cpi_ctx, shares_out)?;
-
-        Ok(())
-    }
-
-    pub fn redeem(ctx: Context<Redeem>, shares: u64, min_assets_out: u64) -> Result<()> {
-        require!(!ctx.accounts.stablecoin.paused, StablecoinErrorV2::Paused);
-        require!(shares > 0, StablecoinErrorV2::ZeroAmount);
-
-        let stablecoin = &mut ctx.accounts.stablecoin;
-        let mint = &ctx.accounts.mint;
-        let collateral_vault = &ctx.accounts.collateral_vault;
-
-        let total_supply = mint.supply;
-        let total_assets = stablecoin.total_assets;
-
-        require!(shares <= total_supply, StablecoinErrorV2::InsufficientShares);
-        require!(total_assets > 0, StablecoinErrorV2::InsufficientAssets);
-
-        let assets_out = mul_div(
-            shares,
-            total_assets.checked_add(1).ok_or(StablecoinErrorV2::MathOverflow)?,
-            total_supply.checked_add(VIRTUAL_OFFSET).ok_or(StablecoinErrorV2::MathOverflow)?,
-            Rounding::Floor, // Vault-favoring rounding
-        ).ok_or(StablecoinErrorV2::MathOverflow)?;
-        
-        require!(assets_out >= min_assets_out, StablecoinErrorV2::SlippageExceeded);
-        require!(assets_out > 0, StablecoinErrorV2::ZeroAmount);
-
-        // Burn shares from user
-        let cpi_accounts = Burn {
-            mint: mint.to_account_info(),
-            from: ctx.accounts.user_shares_ata.to_account_info(),
-            authority: ctx.accounts.authority.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-        token_2022::burn(cpi_ctx, shares)?;
-
-        // Transfer assets from collateral vault to user
-        let mint_key = stablecoin.mint;
-        let stablecoin_seeds: &[&[&[u8]]] = &[&[
-            STABLECOIN_SEED,
-            mint_key.as_ref(),
-            &[stablecoin.bump],
-        ]];
-
-        let cpi_accounts = Transfer {
-            from: collateral_vault.to_account_info(),
-            to: ctx.accounts.user_collateral_ata.to_account_info(),
-            authority: stablecoin.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, stablecoin_seeds);
-        token_2022::transfer(cpi_ctx, assets_out)?;
-
-        // Update total assets in stablecoin state
-        stablecoin.total_assets = stablecoin.total_assets.checked_sub(assets_out).ok_or(StablecoinErrorV2::MathOverflow)?;
-
-        Ok(())
-    }
-
-    pub fn pause(ctx: Context<UpdateAdmin>) -> Result<()> {
-        ctx.accounts.stablecoin.paused = true;
-        Ok(())
-    }
-
-    pub fn unpause(ctx: Context<UpdateAdmin>) -> Result<()> {
-        ctx.accounts.stablecoin.paused = false;
-        Ok(())
-    }
-
-    pub fn set_transfer_hook(ctx: Context<SetTransferHook>, new_transfer_hook_program_id: Pubkey) -> Result<()> {
-        let stablecoin = &ctx.accounts.stablecoin;
-        let mint_info = ctx.accounts.mint.to_account_info();
-
-        let stablecoin_key = stablecoin.key();
-        let seeds: &[&[&[u8]]] = &[&[
-            STABLECOIN_SEED,
-            stablecoin.mint.as_ref(),
-            &[stablecoin.bump],
-        ]];
-        let signer_seeds = &[&seeds[0][..]];
-
-        let cpi_accounts = ctx.accounts.token_program.to_account_info();
-
-        let set_transfer_hook_ix = spl_token_2022::instruction::set_transfer_hook(
-            &ctx.accounts.token_program.key(),
-            &mint_info.key(),
-            &stablecoin_key, // Authority
-            Some(new_transfer_hook_program_id),
+            &[&[EXTRA_ACCOUNT_METAS_SEED, mint_key.as_ref(), &[bump]]],
         )?;
 
-        solana_program::program::invoke_signed(
-            &set_transfer_hook_ix,
-            &[
-                cpi_accounts.clone(),
-                mint_info.clone(),
-                ctx.accounts.stablecoin.to_account_info(), // Authority
-            ],
-            signer_seeds,
-        )?;
+        // Initialize the ExtraAccountMetaList with our account definitions
+        let mut data = ctx.accounts.extra_account_meta_list.try_borrow_mut_data()?;
+        ExtraAccountMetaList::init::<ExecuteInstruction>(&mut data, &extra_account_metas)?;
+
         Ok(())
     }
 
-    pub fn set_transfer_fee_config(
-        ctx: Context<SetTransferFeeConfig>,
-        transfer_fee_basis_points: u16,
-        maximum_fee: u64,
+    /// Fallback handler — Token-2022 CPIs here on every transfer.
+    /// Verifies the Execute discriminator, checks pause status, and checks blacklist.
+    pub fn fallback<'info>(
+        _program_id: &Pubkey,
+        accounts: &'info [AccountInfo<'info>],
+        data: &[u8],
     ) -> Result<()> {
-        let stablecoin = &ctx.accounts.stablecoin;
-        let mint_info = ctx.accounts.mint.to_account_info();
+        // Verify Execute instruction discriminator
+        if data.len() < 8 {
+            return Err(HookError::InvalidInstruction.into());
+        }
+        let discriminator = &data[..8];
+        if discriminator != ExecuteInstruction::SPL_DISCRIMINATOR_SLICE {
+            return Err(HookError::InvalidInstruction.into());
+        }
 
-        let stablecoin_key = stablecoin.key();
-        let seeds: &[&[&[u8]]] = &[&[
-            STABLECOIN_SEED,
-            stablecoin.mint.as_ref(),
-            &[stablecoin.bump],
-        ]];
-        let signer_seeds = &[&seeds[0][..]];
+        // Accounts layout:
+        // [0] source, [1] mint, [2] dest, [3] authority, [4] extra_meta_list
+        // [5] sss-token program, [6] stablecoin state, [7] source blacklist, [8] dest blacklist
 
-        let set_fee_config_ix = spl_token_2022::instruction::transfer_fee::set_transfer_fee_config(
-            &ctx.accounts.token_program.key(),
-            &mint_info.key(),
-            Some(&stablecoin_key), // Fee authority
-            Some(&stablecoin_key), // Withheld authority
-            transfer_fee_basis_points,
-            maximum_fee,
-        )?;
+        // Check pause: read the `paused` flag from the stablecoin state PDA.
+        // The flag is embedded in a Borsh-serialized struct with variable-length
+        // strings, so we must walk the layout dynamically to find it.
+        if accounts.len() > 6 {
+            let stablecoin_data = accounts[6].try_borrow_data()?;
+            if read_paused_flag(&stablecoin_data) {
+                return Err(HookError::Paused.into());
+            }
+        }
 
-        solana_program::program::invoke_signed(
-            &set_fee_config_ix,
-            &[
-                mint_info.clone(),
-                ctx.accounts.token_program.to_account_info(),
-                ctx.accounts.stablecoin.to_account_info(), // Fee authority
-            ],
-            signer_seeds,
-        )?;
-        Ok(())
-    }
+        // Check blacklist: if the PDA account has data, the address is blacklisted
+        if accounts.len() > 7 {
+            let source_blacklist = &accounts[7];
+            if source_blacklist.data_len() > 0 && **source_blacklist.try_borrow_lamports()? > 0 {
+                return Err(HookError::Blacklisted.into());
+            }
+        }
 
-    pub fn set_transfer_fee_authority(
-        ctx: Context<SetTransferFeeConfig>,
-        new_fee_authority: Option<Pubkey>,
-        new_withdraw_withheld_authority: Option<Pubkey>,
-    ) -> Result<()> {
-        let stablecoin = &ctx.accounts.stablecoin;
-        let mint_info = ctx.accounts.mint.to_account_info();
+        if accounts.len() > 8 {
+            let dest_blacklist = &accounts[8];
+            if dest_blacklist.data_len() > 0 && **dest_blacklist.try_borrow_lamports()? > 0 {
+                return Err(HookError::Blacklisted.into());
+            }
+        }
 
-        let stablecoin_key = stablecoin.key();
-        let seeds: &[&[&[u8]]] = &[&[
-            STABLECOIN_SEED,
-            stablecoin.mint.as_ref(),
-            &[stablecoin.bump],
-        ]];
-        let signer_seeds = &[&seeds[0][..]];
-
-        let set_fee_auth_ix = spl_token_2022::instruction::transfer_fee::set_transfer_fee_authority(
-            &ctx.accounts.token_program.key(),
-            &mint_info.key(),
-            Some(&stablecoin_key), // Current authority
-            new_fee_authority.as_ref(),
-            new_withdraw_withheld_authority.as_ref(),
-        )?;
-
-        solana_program::program::invoke_signed(
-            &set_fee_auth_ix,
-            &[
-                mint_info.clone(),
-                ctx.accounts.token_program.to_account_info(),
-                ctx.accounts.stablecoin.to_account_info(), // Authority
-            ],
-            signer_seeds,
-        )?;
-        Ok(())
-    }
-
-    pub fn set_interest_rate(
-        ctx: Context<SetInterestRate>,
-        new_interest_rate_bps: i16,
-    ) -> Result<()> {
-        let stablecoin = &ctx.accounts.stablecoin;
-        let mint_info = ctx.accounts.mint.to_account_info();
-
-        let stablecoin_key = stablecoin.key();
-        let seeds: &[&[&[u8]]] = &[&[
-            STABLECOIN_SEED,
-            stablecoin.mint.as_ref(),
-            &[stablecoin.bump],
-        ]];
-        let signer_seeds = &[&seeds[0][..]];
-
-        let set_interest_rate_ix = spl_token_2022::instruction::interest_bearing::update_interest_bearing_mint_rate(
-            &ctx.accounts.token_program.key(),
-            &mint_info.key(),
-            &stablecoin_key, // Authority
-            &[], // Additional signers
-            new_interest_rate_bps,
-        )?;
-
-        solana_program::program::invoke_signed(
-            &set_interest_rate_ix,
-            &[
-                mint_info.clone(),
-                ctx.accounts.token_program.to_account_info(),
-                ctx.accounts.stablecoin.to_account_info(), // Authority
-            ],
-            signer_seeds,
-        )?;
+        // Transfer allowed
         Ok(())
     }
 }
 
-#[derive(Accounts)]
-pub struct SetInterestRate<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-        bump = stablecoin.bump,
-        has_one = authority
-    )]
-    pub stablecoin: Account<'info, StablecoinV2>,
+/// Read the `paused` flag from a Borsh-serialized StablecoinState account.
+///
+/// Layout:
+///   8  bytes — Anchor discriminator
+///   32 bytes — authority (Pubkey)
+///   32 bytes — mint (Pubkey)
+///   4 + N    — name (String: 4-byte LE length prefix + UTF-8 bytes)
+///   4 + N    — symbol (String)
+///   4 + N    — uri (String)
+///   1  byte  — decimals
+///   1  byte  — enable_permanent_delegate
+///   1  byte  — enable_transfer_hook
+///   1  byte  — default_account_frozen
+///   1  byte  — paused  ← this is what we read
+fn read_paused_flag(data: &[u8]) -> bool {
+    // Skip discriminator + authority + mint
+    let mut offset: usize = 8usize
+        .checked_add(32)
+        .and_then(|o| o.checked_add(32))
+        .expect("initial offset overflow"); // 72
 
-    #[account(mut, address = stablecoin.mint)]
-    pub mint: InterfaceAccount<'info, Mint>,
+    // Skip three variable-length Borsh strings (name, symbol, uri)
+    for _ in 0..3 {
+        let end = match offset.checked_add(4) {
+            Some(e) => e,
+            None => return false,
+        };
+        if data.len() < end {
+            return false;
+        }
+        let len_slice: [u8; 4] = match data[offset..end].try_into() {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+        let str_len = u32::from_le_bytes(len_slice) as usize;
+        offset = match offset.checked_add(4) {
+            Some(o) => match o.checked_add(str_len) {
+                Some(o2) => o2,
+                None => return false,
+            },
+            None => return false,
+        };
+    }
 
-    pub token_program: Program<'info, Token2022>,
+    // Skip decimals(1) + enable_permanent_delegate(1) + enable_transfer_hook(1) + default_account_frozen(1)
+    offset = match offset.checked_add(4) {
+        Some(o) => o,
+        None => return false,
+    };
+
+    // Read the paused byte
+    if data.len() <= offset {
+        return false;
+    }
+    data[offset] != 0
 }
 
 #[derive(Accounts)]
-pub struct SetTransferFeeConfig<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-        bump = stablecoin.bump,
-        has_one = authority
-    )]
-    pub stablecoin: Account<'info, StablecoinV2>,
-
-    #[account(mut, address = stablecoin.mint)]
-    pub mint: InterfaceAccount<'info, Mint>,
-
-    pub token_program: Program<'info, Token2022>,
-}
-
-#[derive(Accounts)]
-#[instruction(decimals: u8, name: String, symbol: String, uri: String, transfer_fee_basis_points: u16, maximum_fee: u64, interest_rate_bps: u16)]
-pub struct Initialize<'info> {
+pub struct InitializeExtraAccountMetas<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
-    #[account(
-        init,
-        payer = authority,
-        space = StablecoinV2::LEN,
-        seeds = [STABLECOIN_SEED, mint.key().as_ref()],
-        bump
-    )]
-    pub stablecoin: Account<'info, StablecoinV2>,
+    /// CHECK: The ExtraAccountMetaList PDA — initialized here.
+    /// Seeds: ["extra-account-metas", mint]
+    #[account(mut)]
+    pub extra_account_meta_list: AccountInfo<'info>,
 
-    #[account(
-        init,
-        payer = authority,
-        mint::token_program = token_program,
-        mint::authority = stablecoin, // The PDA is the mint authority
-        mint::decimals = decimals,
-        extensions::metadata_pointer::authority = stablecoin,
-        extensions::metadata_pointer::metadata_address = mint,
-        extensions::permanent_delegate::delegate = stablecoin, // Set stablecoin PDA as permanent delegate
-        extensions::transfer_hook::authority = stablecoin, // Set stablecoin PDA as transfer hook authority
-        extensions::transfer_hook::program_id = token_program, // Placeholder, will be set later
-        extensions::transfer_fee::basis_points = transfer_fee_basis_points,
-        extensions::transfer_fee::maximum_fee = maximum_fee,
-        extensions::transfer_fee::fee_authority = stablecoin, // The PDA is the fee authority
-        extensions::transfer_fee::withdraw_withheld_authority = stablecoin, // The PDA is the withdraw withheld authority
-        extensions::interest_bearing::rate = interest_rate_bps,
-        extensions::interest_bearing::authority = stablecoin,
-    )]
-    pub mint: InterfaceAccount<'info, Mint>,
+    /// CHECK: The Token-2022 mint that has this hook attached
+    pub mint: AccountInfo<'info>,
 
-    #[account(
-        init,
-        payer = authority,
-        associated_token::mint = collateral_mint,
-        associated_token::authority = stablecoin,
-        associated_token::token_program = token_program,
-    )]
-    pub collateral_vault: InterfaceAccount<'info, TokenAccount>,
-    
-    /// CHECK: This is the mint of the collateral token.
-    pub collateral_mint: UncheckedAccount<'info>,
-
-    /// CHECK: The Token Metadata Program ID for CPI
-    #[account(address = spl_token_metadata_interface::ID)]
-    pub token_metadata_program: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token2022>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
-    pub rent: Sysvar<'info, Rent>,
-}
-
-#[derive(Accounts)]
-pub struct Sync<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        mut,
-        seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-        bump = stablecoin.bump,
-        has_one = authority
-    )]
-    pub stablecoin: Account<'info, StablecoinV2>,
-
-    #[account(
-        address = stablecoin.collateral_vault,
-    )]
-    pub collateral_vault: InterfaceAccount<'info, TokenAccount>,
-}
-
-#[derive(Accounts)]
-pub struct Deposit<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        mut,
-        seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-        bump = stablecoin.bump,
-        has_one = authority
-    )]
-    pub stablecoin: Account<'info, StablecoinV2>,
-
-    #[account(
-        mut,
-        address = stablecoin.mint,
-    )]
-    pub mint: InterfaceAccount<'info, Mint>,
-
-    #[account(
-        mut,
-        address = stablecoin.collateral_vault,
-    )]
-    pub collateral_vault: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub user_collateral_ata: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub user_shares_ata: InterfaceAccount<'info, TokenAccount>,
-
-    pub token_program: Program<'info, Token2022>,
-}
-
-#[derive(Accounts)]
-pub struct Redeem<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        mut,
-        seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-        bump = stablecoin.bump,
-        has_one = authority
-    )]
-    pub stablecoin: Account<'info, StablecoinV2>,
-
-    #[account(
-        mut,
-        address = stablecoin.mint,
-    )]
-    pub mint: InterfaceAccount<'info, Mint>,
-
-    #[account(
-        mut,
-        address = stablecoin.collateral_vault,
-    )]
-    pub collateral_vault: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub user_collateral_ata: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub user_shares_ata: InterfaceAccount<'info, TokenAccount>,
-
-    pub token_program: Program<'info, Token2022>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateAdmin<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        mut,
-        seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-        bump = stablecoin.bump,
-        has_one = authority
-    )]
-    pub stablecoin: Account<'info, StablecoinV2>,
-}
-
-#[derive(Accounts)]
-pub struct SetTransferHook<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-        bump = stablecoin.bump,
-        has_one = authority
-    )]
-    pub stablecoin: Account<'info, StablecoinV2>,
-
-    #[account(mut, address = stablecoin.mint)]
-    pub mint: InterfaceAccount<'info, Mint>,
-
-    pub token_program: Program<'info, Token2022>,
 }

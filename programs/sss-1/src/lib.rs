@@ -1,393 +1,175 @@
-use anchor_lang::prelude::*;
-use anchor_spl::token_2022::{self, MintTo, Burn, Token2022};
-use anchor_spl::token_interface::{Mint, TokenAccount};
-use spl_token_2022::extension::{
-    ExtensionType,
-    metadata_pointer::MetadataPointer,
-    permanent_delegate::PermanentDelegate,
-    transfer_hook::TransferHook,
-    transfer_fee::TransferFeeConfig, // New import
-};
-use spl_token_metadata_interface::{
-    state::TokenMetadata,
-    instruction::initialize as initialize_metadata_instruction,
-};
-
-pub mod state;
 pub mod constants;
+pub mod enums;
 pub mod error;
+pub mod events;
+pub mod instructions;
+pub mod state;
 
-use state::*;
-use error::*;
-use constants::*;
+use anchor_lang::prelude::*;
 
-declare_id!("8jBjnag7xWAnJkG5hFnjH7qZtwFp5ua57TjzwpHhhHpL");
+pub use constants::*;
+pub use enums::*;
+pub use events::*;
+pub use instructions::*;
+pub use state::*;
+
+declare_id!("47TNsKC1iJvLTKYRMbfYjrod4a56YE1f4qv73hZkdWUZ");
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::StablecoinError;
+
+    #[test]
+    fn constants_seeds_and_limits() {
+        assert_eq!(STABLECOIN_SEED, b"stablecoin");
+        assert_eq!(ROLE_SEED, b"role");
+        assert_eq!(MINTER_SEED, b"minter");
+        assert_eq!(BLACKLIST_SEED, b"blacklist");
+        assert_eq!(SUPPLY_CAP_SEED, b"supply_cap");
+        assert_eq!(MAX_NAME_LEN, 32);
+        assert_eq!(MAX_SYMBOL_LEN, 10);
+        assert_eq!(MAX_URI_LEN, 200);
+        assert_eq!(MAX_REASON_LEN, 100);
+    }
+
+    #[test]
+    fn role_flags_len_and_serialization() {
+        assert_eq!(RoleFlags::LEN, 6);
+        let all = RoleFlags {
+            is_minter: true,
+            is_burner: true,
+            is_pauser: true,
+            is_freezer: true,
+            is_blacklister: true,
+            is_seizer: true,
+        };
+        let bytes = all.try_to_vec().unwrap();
+        assert_eq!(bytes.len(), 6);
+        let decoded: RoleFlags = RoleFlags::deserialize(&mut &bytes[..]).unwrap();
+        assert!(decoded.is_minter && decoded.is_seizer);
+    }
+
+    #[test]
+    fn stablecoin_state_is_sss2() {
+        let base = StablecoinState {
+            authority: Pubkey::default(),
+            mint: Pubkey::default(),
+            name: String::new(),
+            symbol: String::new(),
+            uri: String::new(),
+            decimals: 6,
+            enable_permanent_delegate: false,
+            enable_transfer_hook: false,
+            default_account_frozen: false,
+            paused: false,
+            total_minted: 0,
+            total_burned: 0,
+            bump: 0,
+        };
+        assert!(!base.is_sss2());
+
+        let sss2_like = StablecoinState {
+            authority: Pubkey::default(),
+            mint: Pubkey::default(),
+            name: String::new(),
+            symbol: String::new(),
+            uri: String::new(),
+            decimals: 6,
+            enable_permanent_delegate: true,
+            enable_transfer_hook: true,
+            default_account_frozen: true,
+            paused: false,
+            total_minted: 0,
+            total_burned: 0,
+            bump: 0,
+        };
+        assert!(sss2_like.is_sss2());
+    }
+
+    #[test]
+    fn stablecoin_error_variants_exist() {
+        let _ = StablecoinError::Unauthorized;
+        let _ = StablecoinError::Paused;
+        let _ = StablecoinError::ComplianceNotEnabled;
+        let _ = StablecoinError::AlreadyBlacklisted;
+        let _ = StablecoinError::NotBlacklisted;
+        let _ = StablecoinError::QuotaExceeded;
+        let _ = StablecoinError::ZeroAmount;
+        let _ = StablecoinError::NameTooLong;
+        let _ = StablecoinError::SymbolTooLong;
+        let _ = StablecoinError::UriTooLong;
+        let _ = StablecoinError::ReasonTooLong;
+        let _ = StablecoinError::Blacklisted;
+        let _ = StablecoinError::MathOverflow;
+        let _ = StablecoinError::InvalidRoleConfig;
+        let _ = StablecoinError::SupplyCapExceeded;
+    }
+}
 
 #[program]
-pub mod sss_1 {
+pub mod solana_stablecoin_standard {
     use super::*;
 
-    pub fn initialize(
-        ctx: Context<Initialize>,
-        decimals: u8,
-        name: String,
-        symbol: String,
-        uri: String,
-        transfer_fee_basis_points: u16,
-        maximum_fee: u64,
+    // === SSS-1 Instructions ===
+    pub fn initialize_stablecoin(
+        ctx: Context<InitializeStablecoin>,
+        params: InitializeParams,
     ) -> Result<()> {
-        let stablecoin = &mut ctx.accounts.stablecoin;
-        stablecoin.authority = ctx.accounts.authority.key();
-        stablecoin.mint = ctx.accounts.mint.key();
-        stablecoin.decimals = decimals;
-        stablecoin.paused = false;
-        stablecoin.bump = ctx.bumps.stablecoin;
-
-        let stablecoin_key = stablecoin.key(); // The stablecoin PDA is the authority for the mint
-        let seeds: &[&[&[u8]]] = &[&[
-            STABLECOIN_SEED,
-            ctx.accounts.mint.key().as_ref(), // Use the mint key for PDA derivation
-            &[ctx.bumps.stablecoin],
-        ]];
-        let signer_seeds = &[&seeds[0][..]];
-
-        // Initialize Transfer Fee Config (Explicitly via CPI)
-        let transfer_fee_ix = spl_token_2022::instruction::initialize_transfer_fee_config(
-            &ctx.accounts.token_program.key(),
-            &ctx.accounts.mint.key(),
-            Some(&stablecoin_key),
-            Some(&stablecoin_key),
-            transfer_fee_basis_points,
-            maximum_fee,
-        )?;
-
-        solana_program::program::invoke_signed(
-            &transfer_fee_ix,
-            &[
-                ctx.accounts.mint.to_account_info(),
-                ctx.accounts.token_program.to_account_info(),
-            ],
-            signer_seeds,
-        )?;
-
-        // Initialize metadata for the mint
-        let cpi_accounts = ctx.accounts.token_metadata_program.to_account_info();
-        let mint_info = ctx.accounts.mint.to_account_info();
-        let system_program_info = ctx.accounts.system_program.to_account_info();
-        let rent_info = ctx.accounts.rent.to_account_info();
-
-        // Instruction to initialize metadata
-        let initialize_metadata_ix = initialize_metadata_instruction(
-            &ctx.accounts.token_metadata_program.key(), // Token Metadata Program ID
-            &mint_info.key(), // Mint Account
-            &stablecoin_key, // Mint Authority
-            &stablecoin_key, // Freeze Authority (can be same as mint authority)
-            name,
-            symbol,
-            uri,
-        );
-
-        solana_program::program::invoke_signed(
-            &initialize_metadata_ix,
-            &[
-                cpi_accounts.clone(),
-                mint_info.clone(),
-                ctx.accounts.stablecoin.to_account_info(), // Mint Authority
-                ctx.accounts.stablecoin.to_account_info(), // Freeze Authority
-                system_program_info.clone(), // System Program (needed for CPI)
-                rent_info.clone(), // Rent Sysvar (needed for CPI)
-            ],
-            signer_seeds,
-        )?;
-        Ok(())
+        ctx.accounts.initialize_stablecoin(params, ctx.bumps)
     }
 
-    pub fn mint(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
-        require!(!ctx.accounts.stablecoin.paused, StablecoinError::Paused);
-        require!(amount > 0, StablecoinError::ZeroAmount);
-
-        let mint_key = ctx.accounts.stablecoin.mint;
-        let seeds: &[&[&[u8]]] = &[&[
-            STABLECOIN_SEED,
-            mint_key.as_ref(),
-            &[ctx.accounts.stablecoin.bump],
-        ]];
-
-        let cpi_accounts = MintTo {
-            mint: ctx.accounts.mint.to_account_info(),
-            to: ctx.accounts.destination.to_account_info(),
-            authority: ctx.accounts.stablecoin.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, seeds);
-
-        token_2022::mint_to(cpi_ctx, amount)?;
-        Ok(())
+    pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
+        ctx.accounts.mint_tokens(amount)
     }
 
-    pub fn burn(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
-        require!(!ctx.accounts.stablecoin.paused, StablecoinError::Paused);
-        require!(amount > 0, StablecoinError::ZeroAmount);
-
-        let cpi_accounts = Burn {
-            mint: ctx.accounts.mint.to_account_info(),
-            from: ctx.accounts.source.to_account_info(),
-            authority: ctx.accounts.authority.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-
-        token_2022::burn(cpi_ctx, amount)?;
-        Ok(())
+    pub fn burn_tokens(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
+        ctx.accounts.burn_tokens(amount)
     }
 
-    pub fn pause(ctx: Context<UpdateAdmin>) -> Result<()> {
-        ctx.accounts.stablecoin.paused = true;
-        Ok(())
+    pub fn freeze_account(ctx: Context<FreezeTokenAccount>) -> Result<()> {
+        ctx.accounts.freeze_token_account()
     }
 
-    pub fn unpause(ctx: Context<UpdateAdmin>) -> Result<()> {
-        ctx.accounts.stablecoin.paused = false;
-        Ok(())
+    pub fn thaw_account(ctx: Context<ThawTokenAccount>) -> Result<()> {
+        ctx.accounts.thaw_token_account()
     }
-pub fn set_transfer_hook(ctx: Context<SetTransferHook>, new_transfer_hook_program_id: Pubkey) -> Result<()> {
-    let stablecoin = &ctx.accounts.stablecoin;
-    let mint_info = ctx.accounts.mint.to_account_info();
 
-    let stablecoin_key = stablecoin.key();
-    let seeds: &[&[&[u8]]] = &[&[
-        STABLECOIN_SEED,
-        stablecoin.mint.as_ref(),
-        &[stablecoin.bump],
-    ]];
-    let signer_seeds = &[&seeds[0][..]];
+    pub fn pause(ctx: Context<PauseUnpause>) -> Result<()> {
+        ctx.accounts.pause()
+    }
 
-    let cpi_accounts = ctx.accounts.token_program.to_account_info();
+    pub fn unpause(ctx: Context<PauseUnpause>) -> Result<()> {
+        ctx.accounts.unpause()
+    }
 
-    let set_transfer_hook_ix = spl_token_2022::instruction::set_transfer_hook(
-        &ctx.accounts.token_program.key(),
-        &mint_info.key(),
-        &stablecoin_key, // Authority
-        Some(new_transfer_hook_program_id),
-    )?;
+    pub fn update_roles(ctx: Context<UpdateRoles>, roles: RoleFlags) -> Result<()> {
+        ctx.accounts.update_roles(roles)
+    }
 
-    solana_program::program::invoke_signed(
-        &set_transfer_hook_ix,
-        &[
-            cpi_accounts.clone(),
-            mint_info.clone(),
-            ctx.accounts.stablecoin.to_account_info(), // Authority
-        ],
-        signer_seeds,
-    )?;
-    Ok(())
-}
+    pub fn update_minter(ctx: Context<UpdateMinter>, quota: u64) -> Result<()> {
+        ctx.accounts.update_minter(quota, &ctx.bumps)
+    }
 
-pub fn set_transfer_fee_config(
-    ctx: Context<SetTransferFeeConfig>,
-    transfer_fee_basis_points: u16,
-    maximum_fee: u64,
-) -> Result<()> {
-    let stablecoin = &ctx.accounts.stablecoin;
-    let mint_info = ctx.accounts.mint.to_account_info();
+    pub fn transfer_authority(ctx: Context<TransferAuthority>) -> Result<()> {
+        ctx.accounts.transfer_authority()
+    }
 
-    let stablecoin_key = stablecoin.key();
-    let seeds: &[&[&[u8]]] = &[&[
-        STABLECOIN_SEED,
-        stablecoin.mint.as_ref(),
-        &[stablecoin.bump],
-    ]];
-    let signer_seeds = &[&seeds[0][..]];
+    pub fn update_supply_cap(ctx: Context<UpdateSupplyCap>, cap: u64) -> Result<()> {
+        ctx.accounts.update_supply_cap(cap)
+    }
 
-    let set_fee_config_ix = spl_token_2022::instruction::transfer_fee::set_transfer_fee_config(
-        &ctx.accounts.token_program.key(),
-        &mint_info.key(),
-        Some(&stablecoin_key), // Fee authority
-        Some(&stablecoin_key), // Withheld authority
-        transfer_fee_basis_points,
-        maximum_fee,
-    )?;
+    // === SSS-2 Compliance Instructions ===
 
-    solana_program::program::invoke_signed(
-        &set_fee_config_ix,
-        &[
-            mint_info.clone(),
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.stablecoin.to_account_info(), // Fee authority
-        ],
-        signer_seeds,
-    )?;
-    Ok(())
-}
+    pub fn add_to_blacklist(ctx: Context<AddToBlacklist>, reason: String) -> Result<()> {
+        ctx.accounts.add_to_blacklist(reason, ctx.bumps)
+    }
 
-pub fn set_transfer_fee_authority(
-    ctx: Context<SetTransferFeeConfig>,
-    new_fee_authority: Option<Pubkey>,
-    new_withdraw_withheld_authority: Option<Pubkey>,
-) -> Result<()> {
-    let stablecoin = &ctx.accounts.stablecoin;
-    let mint_info = ctx.accounts.mint.to_account_info();
+    pub fn remove_from_blacklist(ctx: Context<RemoveFromBlacklist>) -> Result<()> {
+        ctx.accounts.remove_from_blacklist()
+    }
 
-    let stablecoin_key = stablecoin.key();
-    let seeds: &[&[&[u8]]] = &[&[
-        STABLECOIN_SEED,
-        stablecoin.mint.as_ref(),
-        &[stablecoin.bump],
-    ]];
-    let signer_seeds = &[&seeds[0][..]];
-
-    let set_fee_auth_ix = spl_token_2022::instruction::transfer_fee::set_transfer_fee_authority(
-        &ctx.accounts.token_program.key(),
-        &mint_info.key(),
-        Some(&stablecoin_key), // Current authority
-        new_fee_authority.as_ref(),
-        new_withdraw_withheld_authority.as_ref(),
-    )?;
-
-    solana_program::program::invoke_signed(
-        &set_fee_auth_ix,
-        &[
-            mint_info.clone(),
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.stablecoin.to_account_info(), // Authority
-        ],
-        signer_seeds,
-    )?;
-    Ok(())
-}
-}
-#[derive(Accounts)]
-pub struct SetTransferFeeConfig<'info> {
-pub authority: Signer<'info>,
-#[account(
-    seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-    bump = stablecoin.bump,
-    has_one = authority
-)]
-pub stablecoin: Account<'info, Stablecoin>,
-
-#[account(mut, address = stablecoin.mint)]
-pub mint: InterfaceAccount<'info, Mint>,
-
-pub token_program: Program<'info, Token2022>,
-}
-#[derive(Accounts)]
-#[instruction(decimals: u8, name: String, symbol: String, uri: String, transfer_fee_basis_points: u16, maximum_fee: u64)]
-pub struct Initialize<'info> {
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
-    #[account(
-        init,
-        payer = authority,
-        space = Stablecoin::LEN,
-        seeds = [STABLECOIN_SEED, mint.key().as_ref()],
-        bump
-    )]
-    pub stablecoin: Account<'info, Stablecoin>,
-
-    #[account(
-        init,
-        payer = authority,
-        mint::token_program = token_program,
-        mint::authority = stablecoin, // The PDA is the mint authority
-        mint::decimals = decimals,
-        extensions::metadata_pointer::authority = stablecoin,
-        extensions::metadata_pointer::metadata_address = mint,
-        extensions::permanent_delegate::delegate = stablecoin, // Set stablecoin PDA as permanent delegate
-        extensions::transfer_hook::authority = stablecoin, // Set stablecoin PDA as transfer hook authority
-        extensions::transfer_hook::program_id = token_program, // Placeholder, will be set later
-        extensions::transfer_fee::basis_points = transfer_fee_basis_points,
-        extensions::transfer_fee::maximum_fee = maximum_fee,
-        extensions::transfer_fee::fee_authority = stablecoin, // The PDA is the fee authority
-        extensions::transfer_fee::withdraw_withheld_authority = stablecoin, // The PDA is the withdraw withheld authority
-    )]
-    pub mint: InterfaceAccount<'info, Mint>,
-
-    /// CHECK: The Token Metadata Program ID for CPI
-    #[account(address = spl_token_metadata_interface::ID)]
-    pub token_metadata_program: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token2022>,
-    pub system_program: Program<'info, System>,
-    pub rent: Sysvar<'info, Rent>,
-}
-
-#[derive(Accounts)]
-pub struct MintTokens<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-        bump = stablecoin.bump,
-        has_one = authority
-    )]
-    pub stablecoin: Account<'info, Stablecoin>,
-
-    #[account(
-        mut,
-        address = stablecoin.mint,
-    )]
-    pub mint: InterfaceAccount<'info, Mint>,
-
-    #[account(
-        mut,
-        token::mint = mint,
-    )]
-    pub destination: InterfaceAccount<'info, TokenAccount>,
-
-    pub token_program: Program<'info, Token2022>,
-}
-
-#[derive(Accounts)]
-pub struct BurnTokens<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-        bump = stablecoin.bump,
-        has_one = authority
-    )]
-    pub stablecoin: Account<'info, Stablecoin>,
-
-    #[account(
-        mut,
-        address = stablecoin.mint,
-    )]
-    pub mint: InterfaceAccount<'info, Mint>,
-
-    #[account(
-        mut,
-        token::mint = mint,
-        token::authority = authority,
-    )]
-    pub source: InterfaceAccount<'info, TokenAccount>,
-
-    pub token_program: Program<'info, Token2022>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateAdmin<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        mut,
-        seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-        bump = stablecoin.bump,
-        has_one = authority
-    )]
-    pub stablecoin: Account<'info, Stablecoin>,
-}
-
-#[derive(Accounts)]
-pub struct SetTransferHook<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        seeds = [STABLECOIN_SEED, stablecoin.mint.as_ref()],
-        bump = stablecoin.bump,
-        has_one = authority
-    )]
-    pub stablecoin: Account<'info, Stablecoin>,
-
-    #[account(mut, address = stablecoin.mint)]
-    pub mint: InterfaceAccount<'info, Mint>,
-
-    pub token_program: Program<'info, Token2022>,
+    pub fn seize(ctx: Context<Seize>) -> Result<()> {
+        ctx.accounts.seize()
+    }
 }
