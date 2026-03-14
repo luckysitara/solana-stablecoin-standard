@@ -1,6 +1,6 @@
 # Solana Stablecoin Standard (SSS)
 
-Open-source standards and SDK for stablecoins on Solana — production-ready templates that institutions and builders can fork, customize, and deploy.
+Open-source standards and SDK for stablecoins on Solana — production-ready templates that institutions and builders can fork, customize, and deploy built with love by BUGHACKER(luckysitara).
 
 [![tests](https://img.shields.io/badge/tests-SDK%20%2B%20integration%20%2B%20backend%20%2B%20fuzz-green)](docs/TESTING.md)
 [![Devnet](https://img.shields.io/badge/devnet-deployed-9945FF)](docs/DEVNET.md)
@@ -289,11 +289,11 @@ Before submitting a PR or for local verification:
 ## Resources
 
 - [Solana Documentation](https://docs.solana.com/)
+- [Confidential Token](https://www.quicknode.com/guides/solana-development/spl-tokens/token-2022/confidential)
 - [Anchor Framework](https://www.anchor-lang.com/)
 - [SPL Token-2022](https://spl.solana.com/token-2022)
 - [Solana Explorer](https://explorer.solana.com/)
 - [Exo Technologies — AI Audits](https://ai-audits.exotechnologies.xyz)
 
-## License
 
-MIT
+<p>Built with ❤️ by BUGHACKER</p>
