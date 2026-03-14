@@ -1,0 +1,99 @@
+import { z } from "zod";
+
+const amountSchema = z.union([z.number(), z.string()]);
+
+/** Amount > 0 (matches program: zero mint/burn rejected). */
+const amountPositiveSchema = amountSchema
+  .transform((v) => (typeof v === "string" ? BigInt(v) : BigInt(v)))
+  .refine((n) => n > 0n, { message: "Amount must be greater than zero" });
+
+export const mintBodySchema = z.object({
+  recipient: z.string(),
+  amount: amountPositiveSchema,
+  minter: z.string().optional(),
+});
+
+export const burnBodySchema = z.object({
+  amount: amountPositiveSchema,
+  burner: z.string().optional(),
+});
+
+export const freezeThawBodySchema = z.object({
+  mint: z.string().min(1, "mint required"),
+  account: z.string().optional(),
+  owner: z.string().optional(),
+});
+
+export const pauseUnpauseBodySchema = z.object({
+  mint: z.string(),
+});
+
+export const seizeBodySchema = z.object({
+  mint: z.string(),
+  from: z.string(),
+  to: z.string(),
+  amount: amountSchema,
+});
+
+export const rolesBodySchema = z.object({
+  mint: z.string(),
+  holder: z.string(),
+  roles: z.object({
+    minter: z.boolean().optional(),
+    burner: z.boolean().optional(),
+    pauser: z.boolean().optional(),
+    freezer: z.boolean().optional(),
+    blacklister: z.boolean().optional(),
+    seizer: z.boolean().optional(),
+  }),
+});
+
+export const webhookBodySchema = z.object({
+  type: z.string().optional(),
+  programId: z.string().optional(),
+  signature: z.string().optional(),
+  logs: z.array(z.string()).optional(),
+  err: z.unknown().optional(),
+});
+
+export const blacklistGetQuerySchema = z.object({
+  mint: z.string().optional(),
+});
+
+export const blacklistPostBodySchema = z.object({
+  mint: z.string().optional(),
+  address: z.string(),
+  reason: z.string().optional(),
+});
+
+export const blacklistDeleteParamsSchema = z.object({
+  address: z.string(),
+});
+
+export const blacklistDeleteQuerySchema = z.object({
+  mint: z.string().optional(),
+});
+
+export const screeningBodySchema = z.object({
+  address: z.string(),
+});
+
+export const auditLogQuerySchema = z.object({
+  action: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  mint: z.string().optional(),
+  format: z.enum(["json", "csv"]).optional(),
+});
+
+export type MintBody = z.infer<typeof mintBodySchema>;
+export type BurnBody = z.infer<typeof burnBodySchema>;
+export type FreezeThawBody = z.infer<typeof freezeThawBodySchema>;
+export type PauseUnpauseBody = z.infer<typeof pauseUnpauseBodySchema>;
+export type SeizeBody = z.infer<typeof seizeBodySchema>;
+export type RolesBody = z.infer<typeof rolesBodySchema>;
+export type WebhookBody = z.infer<typeof webhookBodySchema>;
+export type BlacklistGetQuery = z.infer<typeof blacklistGetQuerySchema>;
+export type BlacklistPostBody = z.infer<typeof blacklistPostBodySchema>;
+export type ScreeningBody = z.infer<typeof screeningBodySchema>;
+export type AuditLogQuery = z.infer<typeof auditLogQuerySchema>;
