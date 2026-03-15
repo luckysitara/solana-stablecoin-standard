@@ -66,12 +66,15 @@ chmod +x scripts/upgrade-program-id.sh
 ./scripts/upgrade-program-id.sh sss-1    # update programs/sss-1 and Anchor.toml
 # Or for the transfer hook program:
 ./scripts/upgrade-program-id.sh sss-2    # update programs/sss-2 and Anchor.toml
+# Or for the token privacy program:
+./scripts/upgrade-program-id.sh sss-3   # update programs/sss-3 and Anchor.toml
+anchor keys sync    # update all keys inconsistencies
 ```
 
 The script updates:
 
-- `programs/sss-1/src/lib.rs` or `programs/sss-2/src/lib.rs` — `declare_id!(...)`
-- `Anchor.toml` — the corresponding `sss_1` or `sss_2` program ID
+- `programs/sss-1/src/lib.rs` or `programs/sss-2/src/lib.rs` or programs/sss-3/src/lib.rs — `declare_id!(...)`
+- `Anchor.toml` — the corresponding `sss_1`, sss_2 or `sss_3` program ID
 
 **macOS vs Linux:** The script detects GNU sed and uses `sed -i` on Linux, `sed -i ''` on macOS. If you see sed errors, adjust the in-place flag in the script (see comment inside).
 
@@ -128,6 +131,8 @@ Verify on Explorer: open the mint address and confirm the stablecoin state accou
 | --------------- | ------- |
 | Update sss-1 ID | `./scripts/upgrade-program-id.sh sss-1` |
 | Update sss-2 ID | `./scripts/upgrade-program-id.sh sss-2` |
+| Update sss-3 ID | `./scripts/upgrade-program-id.sh sss-3` |
+
 | Build           | `anchor build && pnpm run build:sdk` |
 | Deploy devnet   | `anchor deploy --provider.cluster devnet` |
 | Init preset     | `pnpm run cli init --preset sss-1 -n Name -s SYM --uri ""` |
