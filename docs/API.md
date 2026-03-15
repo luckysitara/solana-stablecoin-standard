@@ -23,7 +23,7 @@ HTTP server (default port 3000). Environment: `RPC_URL`, `KEYPAIR_PATH`, `MINT_A
 
 - **GET /status/:mint**  
   Returns stablecoin status for the given mint (path param). No auth.  
-  Response: `{ mint, authority, name, symbol, uri, decimals, paused, totalMinted, totalBurned, supply, preset ("SSS-1" | "SSS-2"), enablePermanentDelegate, enableTransferHook, defaultAccountFrozen }`.  
+  Response: `{ mint, authority, name, symbol, uri, decimals, paused, totalMinted, totalBurned, supply, preset ("SSS-1" | "SSS-2" | "SSS-3"), enablePermanentDelegate, enableTransferHook, defaultAccountFrozen, privacyEnabled }`.  
   All numeric amounts are decimal strings. Returns 400 if mint is missing, 500 if the mint is not a valid SSS stablecoin.
 
 - **POST /mint-request**  
@@ -61,6 +61,23 @@ HTTP server (default port 3000). Environment: `RPC_URL`, `KEYPAIR_PATH`, `MINT_A
   Grants or updates roles for the holder. Backend keypair must be the stablecoin authority. Omitted role flags default to false. Used by the TUI Roles tab.
 
 All operations return `{ success: true, signature: "<tx sig>" }` or `{ error: "<message>" }` with status 400/500.
+
+### Privacy Operations (SSS-3, protected)
+
+- **POST /operations/privacy/initialize**  
+  Body: `{ "mint": "<pubkey>" }`. Initializes privacy config for the stablecoin. Backend keypair must be the stablecoin authority.
+
+- **POST /operations/privacy/add-allowlist**  
+  Body: `{ "mint": "<pubkey>", "address": "<pubkey>", "expiryTimestamp": <number | null> }`. Adds address to allowlist with optional time-bound expiry. Authority only.
+
+- **POST /operations/privacy/remove-allowlist**  
+  Body: `{ "mint": "<pubkey>", "address": "<pubkey>" }`. Removes address from allowlist. Authority only.
+
+- **POST /operations/privacy/confidential-mint**  
+  Body: `{ "mint": "<pubkey>", "recipient": "<pubkey>", "encryptedAmount": "<string>" }`. Mints with encrypted amount to allowlisted recipient. Requires minter role.
+
+- **POST /operations/privacy/confidential-transfer**  
+  Body: `{ "mint": "<pubkey>", "recipient": "<pubkey>", "encryptedAmount": "<string>" }`. Transfers encrypted amount; sender and recipient must be allowlisted. Signer must be owner of confidential state account.
 
 ### Fiat-to-stablecoin flow
 

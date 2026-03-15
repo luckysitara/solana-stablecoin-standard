@@ -35,6 +35,12 @@ export const Presets = {
     enableTransferHook: true,
     defaultAccountFrozen: true,
   } as StablecoinExtensions,
+
+  SSS_3: {
+    enablePermanentDelegate: true,
+    enableTransferHook: true,
+    defaultAccountFrozen: true,
+  } as StablecoinExtensions,
 } as const;
 
 export type PresetName = keyof typeof Presets;
@@ -48,6 +54,7 @@ export interface PresetConfig {
 export const PRESET_CONFIGS: Record<PresetName, PresetConfig> = {
   SSS_1: { name: "SSS_1", extensions: Presets.SSS_1 },
   SSS_2: { name: "SSS_2", extensions: Presets.SSS_2 },
+  SSS_3: { name: "SSS_3", extensions: Presets.SSS_3 },
 } as const;
 
 export interface CreateStablecoinParams {
@@ -133,7 +140,7 @@ export function normalizeInitializeParams(
   params: CreateStablecoinParams
 ): InitializeParams {
   let ext: StablecoinExtensions;
-  if (params.preset === "SSS_1" || params.preset === "SSS_2") {
+  if (params.preset === "SSS_1" || params.preset === "SSS_2" || params.preset === "SSS_3") {
     ext = Presets[params.preset];
   } else if (params.extensions) {
     ext = {

@@ -1,30 +1,34 @@
 # Architecture
 
-## Three-Layer Model
+## Four-Layer Model
 
 ```
-Layer 3 — Presets:     SSS-1 (Minimal)  |  SSS-2 (Compliant)
-Layer 2 — Modules:     Compliance (transfer hook, blacklist, permanent delegate)
+Layer 4 — Presets:     SSS-1 (Minimal)  |  SSS-2 (Compliant)  |  SSS-3 (Private)
+Layer 3 — Modules:     Privacy (allowlist, confidential transfers) | Compliance (transfer hook, blacklist, permanent delegate)
+Layer 2 — Extensions:  Token-2022 (PermanentDelegate, TransferHook, DefaultAccountFrozen)
 Layer 1 — Base SDK:    Token creation, mint/freeze authority, metadata, role PDAs
 ```
 
 - **Layer 1 (Base):** PDA derivation (stablecoin, role, minter, blacklist, extra-account-metas), core instructions: initialize, mint, burn, freeze, thaw, pause, unpause, update_roles, update_minter, transfer_authority.
-- **Layer 2 (Compliance):** SSS-2-only: transfer hook (extra-account-metas), blacklist add/remove, seize via permanent delegate. Gated by `enable_transfer_hook` and `enable_permanent_delegate`; instructions fail with a clear error if compliance was not enabled at init.
-- **Layer 3 (Presets):** Config objects `Presets.SSS_1` and `Presets.SSS_2`; custom config via `extensions: { permanentDelegate, transferHook, defaultAccountFrozen }`.
+- **Layer 2 (Extensions):** Token-2022 extensions for compliance and privacy flows.
+- **Layer 3 (Compliance):** SSS-2-only: transfer hook (extra-account-metas), blacklist add/remove, seize via permanent delegate. Gated by `enable_transfer_hook` and `enable_permanent_delegate`; instructions fail with a clear error if compliance was not enabled at init. **Privacy (SSS-3):** Allowlist management, confidential mint/transfer with optional time-bound access. Gated by privacy config initialization.
+- **Layer 4 (Presets):** Config objects `Presets.SSS_1`, `Presets.SSS_2`, and `Presets.SSS_3`; custom config via `extensions: { permanentDelegate, transferHook, defaultAccountFrozen }`.
 
-### SSS-1 vs SSS-2 Feature Matrix
+### SSS-1 vs SSS-2 vs SSS-3 Feature Matrix
 
-| Feature | SSS-1 | SSS-2 |
-|---------|-------|-------|
-| Initialize, mint, burn, freeze, thaw | ✓ | ✓ |
-| Pause / unpause | ✓ | ✓ |
-| Supply cap, minter quota, update roles | ✓ | ✓ |
-| Transfer hook (block transfers) | — | ✓ |
-| Blacklist (add/remove) | — | ✓ |
-| Seize (permanent delegate) | — | ✓ |
-| DefaultAccountFrozen at init | optional | required for seize flow |
+| Feature | SSS-1 | SSS-2 | SSS-3 |
+|---------|-------|-------|-------|
+| Initialize, mint, burn, freeze, thaw | ✓ | ✓ | ✓ |
+| Pause / unpause | ✓ | ✓ | ✓ |
+| Supply cap, minter quota, update roles | ✓ | ✓ | ✓ |
+| Transfer hook (block transfers) | — | ✓ | — |
+| Blacklist (add/remove) | — | ✓ | — |
+| Seize (permanent delegate) | — | ✓ | — |
+| Allowlist (scoped, time-bound) | — | — | ✓ |
+| Confidential mint/transfer | — | — | ✓ |
+| DefaultAccountFrozen at init | optional | required for seize | optional |
 
-SSS-2 compliance features are gated by `enable_transfer_hook` and `enable_permanent_delegate`. Calls to blacklist or seize instructions fail with a clear error if compliance was not enabled.
+**SSS-2** compliance features are gated by `enable_transfer_hook` and `enable_permanent_delegate`. Calls to blacklist or seize instructions fail with a clear error if compliance was not enabled. **SSS-3** privacy features are initialized separately; allowlist and confidential transfer instructions fail with a clear error if privacy config was not enabled.
 
 ## Data Flow
 
@@ -62,5 +66,6 @@ Program IDs are deployment-specific. See [DEVNET.md](DEVNET.md) for devnet value
 
 - **SSS Token (sss-1):** `47TNsKC1iJvLTKYRMbfYjrod4a56YE1f4qv73hZkdWUZ` (devnet)
 - **Transfer Hook (sss-2):** `8DMsf39fGWfcrWVjfyEq8fqZf5YcTvVPGgdJr8s2S8Nc` (devnet)
+- **Privacy Module (sss-3):** `PrivacyStakdnr5m7CqxLtmtQwsBi34hchvjbXi3ZmC` (devnet)
 
-Changing the transfer hook program requires recompiling SSS-1 with the new constant and redeploying.
+Changing the transfer hook or privacy program requires recompiling the main SSS-1 program with the new constant and redeploying.

@@ -1,0 +1,1269 @@
+{
+  "address": "XSwLYVBfmBKaWKYF6fTcCng9DSRREArLQE1Cts32NkM",
+  "metadata": {
+    "name": "sss_3",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Solana Stablecoin Standard - Privacy Extension with Confidential Transfers"
+  },
+  "instructions": [
+    {
+      "name": "add_to_allowlist",
+      "discriminator": [
+        149,
+        143,
+        78,
+        134,
+        241,
+        244,
+        7,
+        56
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "privacy_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  118,
+                  97,
+                  99,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stablecoin"
+        },
+        {
+          "name": "address_to_add",
+          "docs": [
+            "Address to be added to allowlist"
+          ]
+        },
+        {
+          "name": "allowlist_entry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119,
+                  108,
+                  105,
+                  115,
+                  116,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              },
+              {
+                "kind": "account",
+                "path": "address_to_add"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "expiry_slot",
+          "type": {
+            "option": "u64"
+          }
+        }
+      ]
+    },
+    {
+      "name": "confidential_mint",
+      "discriminator": [
+        201,
+        155,
+        215,
+        176,
+        81,
+        72,
+        16,
+        195
+      ],
+      "accounts": [
+        {
+          "name": "minter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "privacy_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  118,
+                  97,
+                  99,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stablecoin"
+        },
+        {
+          "name": "allowlist_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119,
+                  108,
+                  105,
+                  115,
+                  116,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              },
+              {
+                "kind": "account",
+                "path": "minter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient"
+        },
+        {
+          "name": "confidential_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              },
+              {
+                "kind": "account",
+                "path": "recipient"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "confidential_transfer",
+      "discriminator": [
+        97,
+        79,
+        128,
+        58,
+        134,
+        222,
+        73,
+        143
+      ],
+      "accounts": [
+        {
+          "name": "sender",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "privacy_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  118,
+                  97,
+                  99,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stablecoin"
+        },
+        {
+          "name": "sender_allowlist",
+          "docs": [
+            "Sender's allowlist entry"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119,
+                  108,
+                  105,
+                  115,
+                  116,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              },
+              {
+                "kind": "account",
+                "path": "sender"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient_allowlist",
+          "docs": [
+            "Recipient's allowlist entry"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119,
+                  108,
+                  105,
+                  115,
+                  116,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              },
+              {
+                "kind": "account",
+                "path": "recipient_pubkey"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient_pubkey"
+        },
+        {
+          "name": "confidential_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              },
+              {
+                "kind": "account",
+                "path": "recipient_pubkey"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "recipient",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "initialize_privacy_config",
+      "discriminator": [
+        139,
+        15,
+        242,
+        122,
+        21,
+        5,
+        117,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "stablecoin",
+          "docs": [
+            "Stablecoin account (must be initialized first)"
+          ]
+        },
+        {
+          "name": "privacy_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  118,
+                  97,
+                  99,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "privacy_enabled",
+          "type": "bool"
+        },
+        {
+          "name": "min_allowlist_size",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "remove_from_allowlist",
+      "discriminator": [
+        45,
+        46,
+        214,
+        56,
+        189,
+        77,
+        242,
+        227
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "privacy_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  118,
+                  97,
+                  99,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stablecoin"
+        },
+        {
+          "name": "allowlist_entry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119,
+                  108,
+                  105,
+                  115,
+                  116,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stablecoin"
+              },
+              {
+                "kind": "account",
+                "path": "allowlist_entry.address",
+                "account": "AllowlistEntry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AllowlistEntry",
+      "discriminator": [
+        42,
+        59,
+        88,
+        1,
+        124,
+        138,
+        92,
+        236
+      ]
+    },
+    {
+      "name": "ConfidentialState",
+      "discriminator": [
+        101,
+        41,
+        18,
+        151,
+        183,
+        53,
+        117,
+        19
+      ]
+    },
+    {
+      "name": "PrivacyConfig",
+      "discriminator": [
+        165,
+        149,
+        218,
+        209,
+        148,
+        237,
+        242,
+        159
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AllowlistEntryAdded",
+      "discriminator": [
+        189,
+        3,
+        10,
+        207,
+        223,
+        123,
+        193,
+        20
+      ]
+    },
+    {
+      "name": "AllowlistEntryRemoved",
+      "discriminator": [
+        62,
+        82,
+        249,
+        76,
+        179,
+        253,
+        95,
+        61
+      ]
+    },
+    {
+      "name": "ConfidentialMinted",
+      "discriminator": [
+        130,
+        20,
+        32,
+        63,
+        124,
+        159,
+        132,
+        71
+      ]
+    },
+    {
+      "name": "ConfidentialTransferred",
+      "discriminator": [
+        45,
+        71,
+        148,
+        77,
+        125,
+        8,
+        193,
+        4
+      ]
+    },
+    {
+      "name": "PrivacyConfigInitialized",
+      "discriminator": [
+        169,
+        16,
+        102,
+        75,
+        206,
+        192,
+        133,
+        243
+      ]
+    },
+    {
+      "name": "PrivacyConfigUpdated",
+      "discriminator": [
+        196,
+        229,
+        11,
+        23,
+        192,
+        117,
+        24,
+        159
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "PrivacyNotEnabled",
+      "msg": "Privacy not enabled for this stablecoin"
+    },
+    {
+      "code": 6001,
+      "name": "NotOnAllowlist",
+      "msg": "Address not on allowlist"
+    },
+    {
+      "code": 6002,
+      "name": "AllowlistEntryExists",
+      "msg": "Allowlist entry already exists"
+    },
+    {
+      "code": 6003,
+      "name": "AllowlistEntryNotFound",
+      "msg": "Allowlist entry not found"
+    },
+    {
+      "code": 6004,
+      "name": "AllowlistExpired",
+      "msg": "Allowlist entry has expired"
+    },
+    {
+      "code": 6005,
+      "name": "AllowlistRevoked",
+      "msg": "Allowlist entry has been revoked"
+    },
+    {
+      "code": 6006,
+      "name": "MaxAllowlistEntriesReached",
+      "msg": "Maximum allowlist entries reached"
+    },
+    {
+      "code": 6007,
+      "name": "InsufficientPermissions",
+      "msg": "Insufficient permissions to manage allowlist"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidPrivacyLevel",
+      "msg": "Invalid privacy level"
+    },
+    {
+      "code": 6009,
+      "name": "ReasonTooLong",
+      "msg": "Reason too long"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidExpirySlot",
+      "msg": "Invalid expiry slot"
+    },
+    {
+      "code": 6011,
+      "name": "ConfidentialTransferFailed",
+      "msg": "Confidential transfer failed"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidRecipient",
+      "msg": "Invalid recipient"
+    },
+    {
+      "code": 6013,
+      "name": "ZeroAmount",
+      "msg": "Zero amount not allowed"
+    }
+  ],
+  "types": [
+    {
+      "name": "AllowlistEntry",
+      "docs": [
+        "Allowlist entry for privacy-enabled transfers",
+        "Seeds: [b\"allowlist_entry\", stablecoin.key().as_ref(), address.key().as_ref()]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stablecoin",
+            "docs": [
+              "Parent stablecoin"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "address",
+            "docs": [
+              "Address on the allowlist"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current status (Active/Revoked/Expired)"
+            ],
+            "type": {
+              "defined": {
+                "name": "AllowlistStatus"
+              }
+            }
+          },
+          {
+            "name": "added_by",
+            "docs": [
+              "Address that added this entry"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "added_at_slot",
+            "docs": [
+              "Slot when this entry was added"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "expiry_slot",
+            "docs": [
+              "Optional expiry slot (None means permanent)"
+            ],
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "transfer_count",
+            "docs": [
+              "Number of transfers by this address"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "total_amount_transferred",
+            "docs": [
+              "Total amount transferred by this address"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AllowlistEntryAdded",
+      "docs": [
+        "Emitted when address is added to allowlist"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stablecoin",
+            "type": "pubkey"
+          },
+          {
+            "name": "address",
+            "type": "pubkey"
+          },
+          {
+            "name": "added_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "expiry_slot",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AllowlistEntryRemoved",
+      "docs": [
+        "Emitted when address is removed from allowlist"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stablecoin",
+            "type": "pubkey"
+          },
+          {
+            "name": "address",
+            "type": "pubkey"
+          },
+          {
+            "name": "removed_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "reason",
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AllowlistStatus",
+      "docs": [
+        "Allowlist entry status"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Revoked"
+          },
+          {
+            "name": "Expired"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfidentialMinted",
+      "docs": [
+        "Emitted when confidential mint is performed"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stablecoin",
+            "type": "pubkey"
+          },
+          {
+            "name": "minter",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfidentialState",
+      "docs": [
+        "Confidential transfer state for auditing",
+        "Seeds: [b\"confidential_state\", stablecoin.key().as_ref(), recipient.key().as_ref()]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stablecoin",
+            "docs": [
+              "Parent stablecoin"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "docs": [
+              "Recipient of confidential transfers"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_received",
+            "docs": [
+              "Total confidential amount received"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "last_transfer_slot",
+            "docs": [
+              "Last confidential transfer slot"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "operation_count",
+            "docs": [
+              "Number of confidential operations"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfidentialTransferred",
+      "docs": [
+        "Emitted when confidential transfer is performed"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stablecoin",
+            "type": "pubkey"
+          },
+          {
+            "name": "sender",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PrivacyConfig",
+      "docs": [
+        "Privacy configuration for a stablecoin",
+        "Seeds: [b\"privacy_config\", stablecoin.key().as_ref()]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stablecoin",
+            "docs": [
+              "Parent stablecoin (SSS-1 or SSS-2)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Authority managing privacy settings"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "privacy_level",
+            "docs": [
+              "Privacy level enforcement"
+            ],
+            "type": {
+              "defined": {
+                "name": "PrivacyLevel"
+              }
+            }
+          },
+          {
+            "name": "privacy_enabled",
+            "docs": [
+              "Is privacy feature active for this stablecoin"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "min_allowlist_size",
+            "docs": [
+              "Minimum number of allowlist entries before privacy can be enforced"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "active_allowlist_entries",
+            "docs": [
+              "Current number of active allowlist entries"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "total_confidential_mints",
+            "docs": [
+              "Total mints via confidential transfer"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_confidential_transfers",
+            "docs": [
+              "Total transfers via confidential transfer"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "last_updated_slot",
+            "docs": [
+              "Last updated slot"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PrivacyConfigInitialized",
+      "docs": [
+        "Emitted when privacy configuration is initialized"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stablecoin",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "privacy_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "min_allowlist_size",
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PrivacyConfigUpdated",
+      "docs": [
+        "Emitted when privacy config is updated"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stablecoin",
+            "type": "pubkey"
+          },
+          {
+            "name": "updated_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "privacy_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "new_min_allowlist_size",
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PrivacyLevel",
+      "docs": [
+        "Privacy level for confidential transfers"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "None"
+          },
+          {
+            "name": "ScopedAllowlist"
+          },
+          {
+            "name": "ZkProof"
+          }
+        ]
+      }
+    }
+  ]
+}

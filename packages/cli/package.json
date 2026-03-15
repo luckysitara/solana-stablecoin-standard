@@ -3,20 +3,23 @@
   "version": "0.1.1",
   "description": "Admin CLI for Solana Stablecoin Standard",
   "main": "dist/index.js",
-  "bin": { "sss-token": "dist/index.js" },
+  "bin": {
+    "sss-token": "dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "node dist/index.js --help && node dist/index.js init --help && node dist/index.js status --help"
   },
   "dependencies": {
-    "@stbr/sss-token": "file:../../sdk/core",
     "@coral-xyz/anchor": "^0.31.1",
     "@solana/web3.js": "^1.98.0",
+    "@stbr/sss-token": "file:../../sdk/core",
     "commander": "^12.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   }
 }

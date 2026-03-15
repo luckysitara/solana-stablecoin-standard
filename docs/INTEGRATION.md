@@ -16,7 +16,7 @@ const connection = new Connection("https://api.devnet.solana.com");
 const authority = Keypair.fromSecretKey(/* ... */);
 
 const stable = await SolanaStablecoin.create(connection, {
-  preset: "SSS_1",  // or "SSS_2" for compliant
+  preset: "SSS_1",  // or "SSS_2" for compliant, "SSS_3" for private
   name: "My USD",
   symbol: "MYUSD",
   uri: "https://example.com/metadata.json",
@@ -57,6 +57,8 @@ await stable.burn(authority.publicKey, { amount: BigInt(50_000_000) });
 
 **SSS-2 compliance:** `stable.compliance.blacklistAdd(blacklisterPubkey, address, "reason")`, `blacklistRemove`, `seize(seizerPubkey, sourceTokenAccount, destTokenAccount)`. Throws `ComplianceNotEnabledError` if the stablecoin is not SSS-2.
 
+**SSS-3 privacy:** `stable.privacy.initializeConfig(authorityKeypair)`, `addToAllowlist(authorityKeypair, addressPubkey, expiryTimestamp)`, `removeFromAllowlist(authorityKeypair, addressPubkey)`, `confidentialMint(minterKeypair, recipientPubkey, encryptedAmount)`, `confidentialTransfer(senderKeypair, recipientPubkey, encryptedAmount)`. Throws `PrivacyNotEnabledError` if the stablecoin is not SSS-3.
+
 ---
 
 ## When to use backend vs SDK
@@ -76,6 +78,7 @@ await stable.burn(authority.publicKey, { amount: BigInt(50_000_000) });
 # Init (preset or custom)
 pnpm run cli init --preset sss-1 -n "My USD" -s MUSD --uri "https://..."
 pnpm run cli init --preset sss-2 -n "Regulated USD" -s RUSD --uri ""
+pnpm run cli init --preset sss-3 -n "Private USD" -s PUSD --uri "https://..."
 
 # Operations (require -m <MINT>)
 pnpm run cli -m <MINT> mint <RECIPIENT> <AMOUNT>

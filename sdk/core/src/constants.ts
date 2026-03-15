@@ -11,3 +11,7 @@ export const SSS_HOOK_PROGRAM_ID = new PublicKey(
 export const TOKEN_2022_PROGRAM_ID = new PublicKey(
   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
 );
+
+export const SSS_PRIVACY_PROGRAM_ID = new PublicKey(
+  process.env.SSS_PRIVACY_PROGRAM_ID ?? "XSwLYVBfmBKaWKYF6fTcCng9DSRREArLQE1Cts32NkM"
+);

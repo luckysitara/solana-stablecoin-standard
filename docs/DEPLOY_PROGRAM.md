@@ -28,7 +28,7 @@ node --version
 ## 1. Clone and setup
 
 ```bash
-git clone https://github.com/luckysitara/solana-stablecoin-standard.git
+git clone <this-repo>
 cd solana-stablecoin-standard
 pnpm install
 ```
@@ -53,6 +53,7 @@ solana-keygen new --outfile wallets/authority.json
 solana-keygen new --outfile wallets/program-keypair.json
 
 # Optional: separate keypair for sss-2 (transfer hook); copy to program-keypair.json when updating sss-2
+# Optional: separate keypair for sss-3 (privacy module); copy to program-keypair.json when updating sss-3
 ```
 
 ---
@@ -66,15 +67,14 @@ chmod +x scripts/upgrade-program-id.sh
 ./scripts/upgrade-program-id.sh sss-1    # update programs/sss-1 and Anchor.toml
 # Or for the transfer hook program:
 ./scripts/upgrade-program-id.sh sss-2    # update programs/sss-2 and Anchor.toml
-# Or for the token privacy program:
-./scripts/upgrade-program-id.sh sss-3   # update programs/sss-3 and Anchor.toml
-anchor keys sync    # update all keys inconsistencies
+# Or for the privacy program:
+./scripts/upgrade-program-id.sh sss-3    # update programs/sss-3 and Anchor.toml
 ```
 
 The script updates:
 
-- `programs/sss-1/src/lib.rs` or `programs/sss-2/src/lib.rs` or programs/sss-3/src/lib.rs — `declare_id!(...)`
-- `Anchor.toml` — the corresponding `sss_1`, sss_2 or `sss_3` program ID
+- `programs/sss-1/src/lib.rs`, `programs/sss-2/src/lib.rs`, or `programs/sss-3/src/lib.rs` — `declare_id!(...)`
+- `Anchor.toml` — the corresponding `sss_1`, `sss_2`, or `sss_3` program ID
 
 **macOS vs Linux:** The script detects GNU sed and uses `sed -i` on Linux, `sed -i ''` on macOS. If you see sed errors, adjust the in-place flag in the script (see comment inside).
 
@@ -119,8 +119,6 @@ Use the CLI or SDK to create a stablecoin (see [INTEGRATION.md](INTEGRATION.md) 
 pnpm run cli init --preset sss-1 -n "My USD" -s MUSD --uri "https://example.com"
 # Or sss-2 for compliant preset
 pnpm run cli init --preset sss-2 -n "Regulated USD" -s RUSD --uri "https://example.com"
-pnpm run cli init --preset sss-3 -n "Regulated USD" -s RUSD --uri "https://example.com"
-
 ```
 
 Verify on Explorer: open the mint address and confirm the stablecoin state account exists.
@@ -133,8 +131,6 @@ Verify on Explorer: open the mint address and confirm the stablecoin state accou
 | --------------- | ------- |
 | Update sss-1 ID | `./scripts/upgrade-program-id.sh sss-1` |
 | Update sss-2 ID | `./scripts/upgrade-program-id.sh sss-2` |
-| Update sss-3 ID | `./scripts/upgrade-program-id.sh sss-3` |
-
 | Build           | `anchor build && pnpm run build:sdk` |
 | Deploy devnet   | `anchor deploy --provider.cluster devnet` |
 | Init preset     | `pnpm run cli init --preset sss-1 -n Name -s SYM --uri ""` |

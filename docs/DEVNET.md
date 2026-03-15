@@ -8,8 +8,9 @@ The SSS programs are deployed on **Solana Devnet**. Use the program IDs below wi
 |-----------|---------|----------|
 | **SSS Token (sss-1)** | `47TNsKC1iJvLTKYRMbfYjrod4a56YE1f4qv73hZkdWUZ` | [View on Explorer](https://explorer.solana.com/address/47TNsKC1iJvLTKYRMbfYjrod4a56YE1f4qv73hZkdWUZ?cluster=devnet) |
 | **Transfer Hook (sss-2)** | `8DMsf39fGWfcrWVjfyEq8fqZf5YcTvVPGgdJr8s2S8Nc` | [View on Explorer](https://explorer.solana.com/address/8DMsf39fGWfcrWVjfyEq8fqZf5YcTvVPGgdJr8s2S8Nc?cluster=devnet) |
+| **Privacy Module (sss-3)** | `XSwLYVBfmBKaWKYF6fTcCng9DSRREArLQE1Cts32NkM` | [View on Explorer](https://explorer.solana.com/address/XSwLYVBfmBKaWKYF6fTcCng9DSRREArLQE1Cts32NkM?cluster=devnet) |
 
-These match `Anchor.toml` and each program’s `declare_id!`. No redeploy needed — use these IDs for devnet.
+These match `Anchor.toml` and each program’s `declare_id!`.
 
 ## Deploy (if you need to redeploy)
 
@@ -42,6 +43,13 @@ pnpm run cli -m <MINT_1> mint $(solana address) 1000000
 pnpm run cli init --preset sss-2 -n "Reg USD" -s RUSD --uri ""
 # Set MINT_2 to the printed mint; grant blacklister role then:
 pnpm run cli -m <MINT_2> blacklist add <SOME_ADDRESS> --reason "Test"
+
+# 5. SSS-3: init, allowlist, confidential mint
+pnpm run cli init --preset sss-3 -n "Priv USD" -s PUSD --uri "https://example.com"
+# Set MINT_3 to the printed mint, then:
+pnpm run cli -m <MINT_3> privacy-init
+pnpm run cli -m <MINT_3> privacy-allow $(solana address)
+pnpm run cli -m <MINT_3> privacy-mint <RECIPIENT> 1000000
 ```
 
 Replace `<MINT_1>`, `<MINT_2>`, and `<SOME_ADDRESS>` with actual pubkeys. For seize you need a source token account with balance and a destination token account; see [OPERATIONS.md](OPERATIONS.md).
@@ -50,10 +58,11 @@ Replace `<MINT_1>`, `<MINT_2>`, and `<SOME_ADDRESS>` with actual pubkeys. For se
 
 After deploying and creating a stablecoin:
 
-1. **Initialize (SSS-1 or SSS-2)** — From CLI: `sss-token init --preset sss-1 -n "Test" -s TST --uri "https://example.com"`. Or use the TypeScript SDK `SolanaStablecoin.create(connection, { preset: "SSS_1", ... }, keypair)`.
+1. **Initialize (SSS-1, SSS-2, or SSS-3)** — From CLI: `sss-token init --preset sss-1 -n "Test" -s TST --uri "https://example.com"`. Or use the TypeScript SDK `SolanaStablecoin.create(connection, { preset: "SSS_1", ... }, keypair)`.
 2. **Mint** — `sss-token -m <MINT> mint <RECIPIENT> 1000000`.
 3. **Status** — `sss-token -m <MINT> status`.
 4. **Supply** — `sss-token -m <MINT> supply`.
+5. **Privacy (SSS-3 only)** — `sss-token -m <MINT> privacy-init`, `privacy-allow <ADDRESS>`, `privacy-mint <RECIPIENT> <AMOUNT>`.
 
 Example Solana Explorer links (replace `<SIG>` and `<MINT>` with actual values):
 
@@ -63,10 +72,11 @@ Example Solana Explorer links (replace `<SIG>` and `<MINT>` with actual values):
 ## Proof of deployment
 
 1. **Deploy programs:** `anchor build && anchor deploy --provider.cluster devnet`
-2. **Run example operations:** Initialize a stablecoin (SSS-1 or SSS-2), mint, and optionally for SSS-2 run blacklist + seize. Example:
+2. **Run example operations:** Initialize a stablecoin (SSS-1, SSS-2, or SSS-3), mint, and optionally run preset-specific operations. Example:
    - `sss-token init --preset sss-1 -n "Test" -s TST --uri "https://example.com"`
    - `sss-token -m <MINT> mint <RECIPIENT> 1000000`
    - For SSS-2: `sss-token -m <MINT> blacklist add <ADDRESS> --reason "OFAC"` then `sss-token -m <MINT> seize <ADDRESS> --to <TREASURY>`
+   - For SSS-3: `sss-token -m <MINT> privacy-init`, `sss-token -m <MINT> privacy-allow <ADDRESS>`, `sss-token -m <MINT> privacy-mint <RECIPIENT> <AMOUNT>`
 3. **Capture proof:** Paste Solana Explorer links in the table below (or run integration tests on devnet and copy from the output).
 
 ### Example transactions (Devnet proof)
@@ -78,9 +88,12 @@ Run `anchor test --provider.cluster devnet --skip-build --skip-deploy` and copy 
 | **Initialize (SSS-1)** | [2UFPxeQubnso6ounH3Tr9tBQ1JVcxRTKGazAVYatnX3YRiGCriXr2v6vg1srxeq9XQj8TbERXijmzjBiPZUA2k9](https://explorer.solana.com/tx/2UFPxeQubnso6ounH3Tr9tBQ1JVcxRTKGazAVYatnX3YRiGCriXr2v6vg1srxeq9XQj8TbERXijmzjBiPZUA2k9?cluster=devnet) |
 | **Mint** | [56T3XGTvasM7rmR88e9TYN2JAnDg1ondWyteW18pDPP3Prdn5edAofFE4egQ6jdF3kBxF6Fyw1uS3Q6k3z1Khcsj](https://explorer.solana.com/tx/56T3XGTvasM7rmR88e9TYN2JAnDg1ondWyteW18pDPP3Prdn5edAofFE4egQ6jdF3kBxF6Fyw1uS3Q6k3z1Khcsj?cluster=devnet) |
 | **Initialize (SSS-2)** | [4HC5L8tCjTmh41zemBbqM9MffEWqabbNQsHLLvPfXjwRf2FiFVZLbRRLDzrEYGr5WLT1thKU15j1q3C5wzhUc4rM](https://explorer.solana.com/tx/4HC5L8tCjTmh41zemBbqM9MffEWqabbNQsHLLvPfXjwRf2FiFVZLbRRLDzrEYGr5WLT1thKU15j1q3C5wzhUc4rM?cluster=devnet) |
+| **Initialize (SSS-3)** | [5RpD9iVLMeBgurpjyfMq51ckpsrZw59jy2hQszpntJuw](https://explorer.solana.com/address/AF4onahTCzYT8PTgAZP48kD7sZNZfAxT4xSSni5exeBJ?cluster=devnet) |
+| **Privacy Init (SSS-3)** | [383GVhMm8CDP1NKSbUibfCPENLNLS88k1PzQKMTpxNbDcyx2Mt2iCiSWGUJxH1QD5usam7nCnU1U5wuBUAjxCG8q](https://explorer.solana.com/tx/383GVhMm8CDP1NKSbUibfCPENLNLS88k1PzQKMTpxNbDcyx2Mt2iCiSWGUJxH1QD5usam7nCnU1U5wuBUAjxCG8q?cluster=devnet) |
+| **Privacy Allowlist (SSS-3)** | [3eMvzYcU4QRbAKektPDxcRWxxmJov4KnSw2C4PA9i85pADVjKEUqe1FJAnpYj6HcVUt1hkLVJ8t39VMQjTV56gxF](https://explorer.solana.com/tx/3eMvzYcU4QRbAKektPDxcRWxxmJov4KnSw2C4PA9i85pADVjKEUqe1FJAnpYj6HcVUt1hkLVJ8t39VMQjTV56gxF?cluster=devnet) |
 | **Seize (SSS-2)** | [56m6nWhMEsGYUQ83CJfQDqhkYTS7oRRHvmy4kHiyhiB9jvpm11menbxetZhib6uwoZjg4EBUrKtjae2AsBaPVd1J](https://explorer.solana.com/tx/56m6nWhMEsGYUQ83CJfQDqhkYTS7oRRHvmy4kHiyhiB9jvpm11menbxetZhib6uwoZjg4EBUrKtjae2AsBaPVd1J?cluster=devnet) |
 
-**Example mint account (SSS-1):** [9zsXSvAxz1opCQvwgeXswGnMbG4xV8dWmdT1emAFy9nY](https://explorer.solana.com/address/9zsXSvAxz1opCQvwgeXswGnMbG4xV8dWmdT1emAFy9nY?cluster=devnet)
+**Example mint account (SSS-3):** [AF4onahTCzYT8PTgAZP48kD7sZNZfAxT4xSSni5exeBJ](https://explorer.solana.com/address/AF4onahTCzYT8PTgAZP48kD7sZNZfAxT4xSSni5exeBJ?cluster=devnet)
 
 Optional: run `./scripts/devnet-proof.sh` after deploy to perform init + mint and print Explorer URLs (requires configured keypair and RPC).
 
@@ -101,8 +114,6 @@ ANCHOR_PROVIDER_CLUSTER=devnet yarn run ts-mocha -p ./tsconfig.json -t 1000000 t
 ```
 
 (Ensure `anchor build` has been run at least once so IDL and program artifacts exist.)
-
----
 
 ## Verification
 

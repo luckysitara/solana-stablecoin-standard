@@ -23,8 +23,12 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
     "@solana/spl-token": "^0.4.9",
+    "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/web3.js": "^1.98.4",
-    "@stbr/sss-token": "file:sdk/core"
+    "@stbr/sss-token": "file:sdk/core",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.4",
+    "sonner": "^2.0.7"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",

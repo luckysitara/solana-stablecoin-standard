@@ -2,11 +2,12 @@
 
 ## Blessed Examples
 
-Three canonical examples demonstrate the full flow per preset:
+Four canonical examples demonstrate the full flow per preset:
 
 1. **Minimal SSS-1** — [examples/1-basic-sss1.ts](../examples/1-basic-sss1.ts): init with preset `SSS_1`, mint, burn, optional freeze/thaw. Use for internal settlement, DAO treasuries.
 2. **SSS-2 Compliant** — [examples/2-sss2-compliant.ts](../examples/2-sss2-compliant.ts): init with preset `SSS_2`, roles, blacklist add, seize. Use for regulated stablecoins with on-chain blacklist.
 3. **Custom config** — [examples/3-custom-config.ts](../examples/3-custom-config.ts): init with no preset and custom `extensions` (e.g. permanent delegate without transfer hook). Use for hybrid deployments.
+4. **Privacy SSS-3** — [examples/11-privacy-confidential-transfer.ts](../examples/11-privacy-confidential-transfer.ts): init with preset `SSS_3`, allowlist management, confidential mint/transfer. Use for privacy-sensitive stablecoins.
 
 Run from repo root: `npx ts-node -P tsconfig.json examples/1-basic-sss1.ts` (set `RPC_URL` for devnet/localnet).
 
@@ -22,8 +23,8 @@ In your app, depend on the local package: `"@stbr/sss-token": "file:path/to/sola
 
 ## Presets and Custom Config
 
-- **Presets:** `Presets.SSS_1` (minimal), `Presets.SSS_2` (compliant). Use in `CreateStablecoinParams.preset`.
-- **Custom:** Omit `preset` and set `extensions: { enablePermanentDelegate?, enableTransferHook?, defaultAccountFrozen? }`.
+- **Presets:** `Presets.SSS_1` (minimal), `Presets.SSS_2` (compliant), `Presets.SSS_3` (private). Use in `CreateStablecoinParams.preset`.
+- **Custom:** Omit `preset` and set `extensions: { enablePermanentDelegate?, enableTransferHook?, defaultAccountFrozen?, enablePrivacy? }`.
 
 ```typescript
 import { SolanaStablecoin, Presets } from "@stbr/sss-token";
@@ -46,6 +47,15 @@ const custom = await SolanaStablecoin.create(connection, {
 
 await stable.compliance.blacklistAdd(blacklisterPubkey, addressPubkey, "Sanctions match");
 await stable.compliance.seize(seizerPubkey, sourceTokenAccount, destinationTokenAccount);
+
+// SSS-3 Privacy (if preset is SSS_3)
+if (stable.isSSS3()) {
+  await stable.privacy.initializeConfig(authorityKeypair);
+  await stable.privacy.addToAllowlist(authorityKeypair, allowlistedAddress, null); // null = no expiry
+  await stable.privacy.confidentialMint(minterKeypair, allowlistedAddress, encryptedAmount);
+  await stable.privacy.confidentialTransfer(senderKeypair, recipientAddress, encryptedAmount);
+}
+
 const supply = await stable.getTotalSupply();
 ```
 
@@ -63,6 +73,7 @@ const supply = await stable.getTotalSupply();
 - `refresh()` — Reload state from chain.
 - `getTotalSupply()` — total_minted - total_burned.
 - `isSSS2()` — True if both permanent delegate and transfer hook are enabled.
+- `isSSS3()` — True if privacy config is initialized.
 - `getRecipientTokenAccount(owner)` — Associated token account for the mint (Token-2022).
 
 ### Core Operations (all presets)
@@ -84,6 +95,16 @@ const supply = await stable.getTotalSupply();
 
 Calls to compliance methods on a non-SSS-2 stablecoin throw `ComplianceNotEnabledError`.
 
+### Privacy (SSS-3 only)
+
+- `privacy.initializeConfig(signer)` — Initialize privacy config for the stablecoin (authority only).
+- `privacy.addToAllowlist(signer, address, expiryTimestamp)` — Add address to allowlist with optional time-bound expiry (authority only). Pass `null` for no expiry.
+- `privacy.removeFromAllowlist(signer, address)` — Remove address from allowlist (authority only).
+- `privacy.confidentialMint(signer, recipient, encryptedAmount)` — Mint with encrypted amount to allowlisted recipient (minter role). Recipient must be allowlisted.
+- `privacy.confidentialTransfer(signer, recipient, encryptedAmount)` — Transfer encrypted amount between allowlisted addresses (sender signer). Both sender and recipient must be allowlisted and not expired.
+
+Calls to privacy methods on a non-SSS-3 stablecoin throw `PrivacyNotEnabledError`.
+
 ## PDA Helpers
 
 From `@stbr/sss-token`:
@@ -93,6 +114,9 @@ From `@stbr/sss-token`:
 - `findMinterPDA(stablecoin, minter [, programId])`
 - `findBlacklistPDA(stablecoin, address [, programId])`
 - `findExtraAccountMetasPDA(mint, hookProgramId)`
+- `findPrivacyConfigPDA(stablecoin [, privacyProgramId])`
+- `findAllowlistEntryPDA(stablecoin, address [, privacyProgramId])`
+- `findConfidentialStatePDA(stablecoin, owner [, privacyProgramId])`
 
 ## Errors and Validation
 

@@ -8,9 +8,11 @@ import {
 } from "@solana/spl-token";
 import idl from "./idl/solana_stablecoin_standard.json";
 import hookIdl from "./idl/sss_transfer_hook.json";
+import privacyIdl from "./idl/sss_privacy.json";
 import {
   SSS_TOKEN_PROGRAM_ID,
   SSS_HOOK_PROGRAM_ID,
+  SSS_PRIVACY_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
 } from "./constants";
 import {
@@ -21,6 +23,10 @@ import {
   findExtraAccountMetasPDA,
   findSupplyCapPDA,
 } from "./pda";
+import {
+  findPrivacyConfigPDA,
+  findAllowlistEntryPDA,
+} from "./privacy-pda";
 import type { MintParams, BurnParams, UpdateRolesParams, UpdateMinterParams } from "./types";
 import { normalizeInitializeParams, type CreateStablecoinParams } from "./types";
 import { ComplianceNotEnabledError } from "./errors";
@@ -737,6 +743,95 @@ export class SolanaStablecoin {
         })
         .rpc();
     },
+  };
+
+  readonly privacy = {
+    initializePrivacyConfig: async (
+      signer: PublicKey,
+      privacyEnabled: boolean,
+      minAllowlistSize: number
+    ): Promise<string> => {
+      const [privacyConfig] = findPrivacyConfigPDA(this.stablecoin);
+      const { Program: AnchorProgram } = await import("@coral-xyz/anchor");
+      const privacyProgram = new AnchorProgram(
+        privacyIdl as unknown as Idl,
+        this.provider
+      ) as Program;
+      return (privacyProgram.methods as any)
+        .initializePrivacyConfig(privacyEnabled, minAllowlistSize)
+        .accounts({
+          authority: signer,
+          stablecoin: this.stablecoin,
+          privacyConfig,
+          systemProgram: SYSTEM_PROGRAM_ID,
+          rent: new PublicKey("SysvarRent111111111111111111111111111111111"),
+        })
+        .rpc();
+    },
+
+    addToAllowlist: async (
+      signer: PublicKey,
+      addressToAdd: PublicKey,
+      expirySlot: bigint | null = null
+    ): Promise<string> => {
+      const [privacyConfig] = findPrivacyConfigPDA(this.stablecoin);
+      const [allowlistEntry] = findAllowlistEntryPDA(this.stablecoin, addressToAdd);
+      const { Program: AnchorProgram } = await import("@coral-xyz/anchor");
+      const privacyProgram = new AnchorProgram(
+        privacyIdl as unknown as Idl,
+        this.provider
+      ) as Program;
+      return (privacyProgram.methods as any)
+        .addToAllowlist(expirySlot === null ? null : new BN(expirySlot.toString()))
+        .accounts({
+          authority: signer,
+          privacyConfig,
+          stablecoin: this.stablecoin,
+          addressToAdd,
+          allowlistEntry,
+          systemProgram: SYSTEM_PROGRAM_ID,
+          rent: new PublicKey("SysvarRent111111111111111111111111111111111"),
+        })
+        .rpc();
+    },
+
+    confidentialMint: async (
+      signer: PublicKey,
+      recipient: PublicKey,
+      amount: bigint
+    ): Promise<string> => {
+      const [privacyConfig] = findPrivacyConfigPDA(this.stablecoin);
+      const [allowlistEntry] = findAllowlistEntryPDA(this.stablecoin, recipient);
+      const [rolePda] = findRolePDA(this.stablecoin, signer, SSS_TOKEN_PROGRAM_ID);
+      const [minterInfoPda] = findMinterPDA(this.stablecoin, signer, SSS_TOKEN_PROGRAM_ID);
+      const [supplyCapPda] = findSupplyCapPDA(this.stablecoin, SSS_TOKEN_PROGRAM_ID);
+      
+      const recipientAta = this.getRecipientTokenAccount(recipient);
+      
+      const { Program: AnchorProgram } = await import("@coral-xyz/anchor");
+      const privacyProgram = new AnchorProgram(
+        privacyIdl as unknown as Idl,
+        this.provider
+      ) as Program;
+      
+      return (privacyProgram.methods as any)
+        .confidentialMint(new BN(amount.toString()))
+        .accounts({
+          minter: signer,
+          stablecoin: this.stablecoin,
+          privacyConfig,
+          recipient,
+          recipientAllowlist: allowlistEntry,
+          recipientTokenAccount: recipientAta,
+          sssTokenProgram: SSS_TOKEN_PROGRAM_ID,
+          mint: this.mintAddress,
+          role: rolePda,
+          minterInfo: minterInfoPda,
+          supplyCap: supplyCapPda,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+        })
+        .rpc();
+    }
   };
 }
 

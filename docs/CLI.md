@@ -19,11 +19,12 @@ Initialize a new stablecoin. Creates mint, stablecoin PDA, and grants all roles 
 ```
 pnpm cli init -p sss-1 -n "My USD" -s MUSD --uri "https://example.com"
 pnpm cli init -p sss-2 -n "Compliant USD" -s cUSD --uri "" --decimals 6
+pnpm cli init -p sss-3 -n "Private USD" -s pUSD --uri "https://example.com" --decimals 6
 ```
 
 | Option | Description |
 |--------|-------------|
-| `-p, --preset <sss-1\|sss-2>` | Preset: sss-1 (minimal) or sss-2 (compliant) |
+| `-p, --preset <sss-1\|sss-2\|sss-3>` | Preset: sss-1 (minimal), sss-2 (compliant), or sss-3 (private) |
 | `-c, --custom <file>` | Custom config TOML/JSON file |
 | `-n, --name <name>` | Token name (required) |
 | `-s, --symbol <symbol>` | Token symbol (required) |
@@ -97,6 +98,60 @@ pnpm cli -m <MINT> unpause
 ### status
 
 Show stablecoin status: name, symbol, decimals, paused, SSS-2, totals.
+
+---
+
+### privacy-init
+
+Initialize privacy config for an SSS-3 stablecoin. Requires authority. **Uses SDK.**
+
+```
+pnpm cli -m <MINT> privacy-init
+```
+
+---
+
+### privacy-allow
+
+Add address to allowlist (SSS-3). Requires authority. **Uses SDK.**
+
+```
+pnpm cli -m <MINT> privacy-allow <ADDRESS_PUBKEY> [--expiry <timestamp>]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--expiry <timestamp>` | Optional Unix timestamp (seconds) for expiry; null = no expiry |
+
+---
+
+### privacy-deny
+
+Remove address from allowlist (SSS-3). Requires authority. **Uses SDK.**
+
+```
+pnpm cli -m <MINT> privacy-deny <ADDRESS_PUBKEY>
+```
+
+---
+
+### privacy-mint
+
+Confidential mint to allowlisted recipient (SSS-3). Requires minter role. **Uses SDK.**
+
+```
+pnpm cli -m <MINT> privacy-mint <RECIPIENT_PUBKEY> <ENCRYPTED_AMOUNT>
+```
+
+---
+
+### privacy-transfer
+
+Confidential transfer between allowlisted addresses (SSS-3). Requires sender signer. **Uses SDK.**
+
+```
+pnpm cli -m <MINT> privacy-transfer <RECIPIENT_PUBKEY> <ENCRYPTED_AMOUNT>
+```
 
 ```
 pnpm cli -m <MINT> status

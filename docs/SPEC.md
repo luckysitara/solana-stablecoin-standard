@@ -6,7 +6,7 @@
 
 ---
 
-## Account types (sss-1)
+## Account types (sss-1, sss-2, sss-3)
 
 | Account         | Seeds | Size (approx) | Purpose |
 | --------------- | ----- | ------------- | ------- |
@@ -15,6 +15,9 @@
 | MinterInfo      | `["minter", stablecoin, minter]` | 8 + 32 + 32 + 8 + 8 + 1 | Quota and minted amount for a minter, bump. |
 | BlacklistEntry  | `["blacklist", stablecoin, address]` | Variable (reason string) | SSS-2: blacklisted address, reason, timestamps. |
 | SupplyCap       | `["supply_cap", stablecoin]` | 8 + 8 + 1 | Optional supply cap (owner, cap, bump). |
+| PrivacyConfig   | `["privacy_config", stablecoin]` | 8 + 32 + 1 + 1 | SSS-3: Privacy settings, authority, enabled flag, bump. |
+| AllowlistEntry  | `["allowlist", stablecoin, address]` | 8 + 32 + 8 + 1 | SSS-3: Whitelisted address, optional expiry timestamp, bump. |
+| ConfidentialState | `["confidential_state", stablecoin, owner]` | 32 + 32 + 8 + 1 | SSS-3: Owner, current encrypted amount, bump. |
 
 ---
 
@@ -39,6 +42,18 @@
 
 ---
 
+## Instructions (sss-3 privacy)
+
+| Instruction            | Who signs   | Description |
+| ---------------------- | ----------- | ----------- |
+| initialize_privacy_config | authority   | Create PrivacyConfig PDA; enable private transfers for stablecoin. |
+| add_to_allowlist        | authority   | Add address to allowlist; optional expiry timestamp for time-bound access. |
+| remove_from_allowlist   | authority   | Remove address from allowlist; close AllowlistEntry PDA. |
+| confidential_mint       | minter      | Mint with encrypted amount to allowlisted recipient; creates ConfidentialState. |
+| confidential_transfer   | sender      | Transfer encrypted amount between allowlisted addresses; validates sender/recipient allowlist status. |
+
+---
+
 ## Instructions (sss-2 transfer hook)
 
 | Instruction | Who signs | Description |
@@ -55,6 +70,8 @@
 **Operator:** Use CLI or SDK with keypair that has minter/burner/pauser/freezer role → mint, burn, freeze, thaw, pause, unpause.
 
 **Compliance (SSS-2):** Blacklister adds/removes addresses; seizer calls seize. Transfer hook blocks transfers involving blacklisted addresses.
+
+**Privacy (SSS-3):** Authority initializes privacy config, then maintains allowlist. Allowlisted users perform confidential mints and transfers; transfers fail if sender or recipient not allowlisted or allowlist entry expired.
 
 ---
 

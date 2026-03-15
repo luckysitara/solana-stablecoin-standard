@@ -106,7 +106,7 @@ function getGlobalOpts(): GlobalOpts {
 program
   .command("init")
   .description("Initialize a new stablecoin")
-  .option("-p, --preset <sss-1|sss-2>", "Preset: sss-1 (minimal) or sss-2 (compliant)")
+  .option("-p, --preset <sss-1|sss-2|sss-3>", "Preset: sss-1 (minimal), sss-2 (compliant) or sss-3 (privacy)")
   .option("-c, --custom <file>", "Custom config TOML/JSON file")
   .requiredOption("-n, --name <name>", "Token name")
   .requiredOption("-s, --symbol <symbol>", "Token symbol")
@@ -117,13 +117,16 @@ program
     const globalOpts = getGlobalOpts();
     const connection = getConnection(globalOpts.rpcUrl);
     const authority = getKeypair(globalOpts.keypair);
-    const preset = opts.preset === "sss-2" ? "SSS_2" : "SSS_1";
+    let preset: "SSS_1" | "SSS_2" | "SSS_3" = "SSS_1";
+    if (opts.preset === "sss-2") preset = "SSS_2";
+    if (opts.preset === "sss-3") preset = "SSS_3";
+
     let params: CreateStablecoinParams = {
       name: opts.name,
       symbol: opts.symbol,
       uri: opts.uri ?? "",
       decimals: parseInt(opts.decimals ?? "6", 10),
-      preset: preset as "SSS_1" | "SSS_2",
+      preset,
     };
     if (opts.custom) {
       const raw = fs.readFileSync(opts.custom, "utf-8");
@@ -137,6 +140,80 @@ program
     console.log("Stablecoin created. Mint:", stable.mintAddress.toBase58());
     const cluster = (globalOpts.rpcUrl || "").toLowerCase().includes("devnet") ? "devnet" : (globalOpts.rpcUrl || "").toLowerCase().includes("mainnet") ? "mainnet-beta" : null;
     if (cluster) console.log("Explorer:", `https://explorer.solana.com/address/${stable.mintAddress.toBase58()}?cluster=${cluster}`);
+  });
+
+// --- Privacy Commands (SSS-3) ---
+
+program
+  .command("privacy-init")
+  .description("Initialize privacy configuration (SSS-3)")
+  .option("--enabled", "Enable privacy immediately", "true")
+  .option("--min-allowlist <n>", "Minimum allowlist size", "5")
+  .action(async (opts: any) => {
+    const globalOpts = getGlobalOpts();
+    const connection = getConnection(globalOpts.rpcUrl);
+    const keypair = getKeypair(globalOpts.keypair);
+    const mintAddr = globalOpts.mint;
+    if (!mintAddr) {
+      console.error("--mint required");
+      process.exit(1);
+    }
+    const mint = new PublicKey(mintAddr);
+    const prog = loadProgram(connection, keypair);
+    const stable = await SolanaStablecoin.load(prog as never, mint);
+    const sig = await stable.privacy.initializePrivacyConfig(
+      keypair.publicKey,
+      opts.enabled === "true",
+      parseInt(opts.minAllowlist as string, 10)
+    );
+    logTx(sig, "Privacy init tx", globalOpts.rpcUrl);
+  });
+
+program
+  .command("privacy-allow <address>")
+  .description("Add address to privacy allowlist (SSS-3)")
+  .option("-e, --expiry <slot>", "Expiry slot (optional)")
+  .action(async (address: any, opts: any) => {
+    const globalOpts = getGlobalOpts();
+    const connection = getConnection(globalOpts.rpcUrl);
+    const keypair = getKeypair(globalOpts.keypair);
+    const mintAddr = globalOpts.mint;
+    if (!mintAddr) {
+      console.error("--mint required");
+      process.exit(1);
+    }
+    const mint = new PublicKey(mintAddr);
+    const prog = loadProgram(connection, keypair);
+    const stable = await SolanaStablecoin.load(prog as never, mint);
+    const sig = await stable.privacy.addToAllowlist(
+      keypair.publicKey,
+      new PublicKey(address as string),
+      opts.expiry ? BigInt(opts.expiry as string) : null
+    );
+    logTx(sig, "Allowlist add tx", globalOpts.rpcUrl);
+  });
+
+program
+  .command("privacy-mint <recipient> <amount>")
+  .description("Confidential mint (SSS-3)")
+  .action(async (recipient: any, amount: any) => {
+    const globalOpts = getGlobalOpts();
+    const connection = getConnection(globalOpts.rpcUrl);
+    const keypair = getKeypair(globalOpts.keypair);
+    const mintAddr = globalOpts.mint;
+    if (!mintAddr) {
+      console.error("--mint required");
+      process.exit(1);
+    }
+    const mint = new PublicKey(mintAddr);
+    const prog = loadProgram(connection, keypair);
+    const stable = await SolanaStablecoin.load(prog as never, mint);
+    const sig = await stable.privacy.confidentialMint(
+      keypair.publicKey,
+      new PublicKey(recipient as string),
+      BigInt(amount as string)
+    );
+    logTx(sig, "Confidential mint tx", globalOpts.rpcUrl);
   });
 
 program
