@@ -361,3 +361,12 @@ Potential improvements for SSS-3 v2+:
 - Multi-sig authority management
 - Time-locked allowlist updates
 - Integration with Solana's upcoming confidential transfer extension
+
+---
+
+## Related Documentation
+- [**SSS-1: Minimal Stablecoin**](./SSS-1.md)
+- [**SSS-2: Compliant Stablecoin**](./SSS-2.md)
+- [**Architecture Overview**](./ARCH.md)
+- [**On-chain Specification**](./SPEC.md)
+- [**Devnet Deployment Guide**](./DEVNET.md)

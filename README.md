@@ -56,45 +56,85 @@ When enabling the SSS-3 Privacy Module, you can choose from these enforcement le
 
 ---
 
+## 🏗️ Architecture
+
+High-level architecture for the Solana Stablecoin Standard.
+
+### System diagram
+
+```mermaid
+flowchart TB
+  subgraph clients [Clients]
+    TUI[TUI]
+    CLI[CLI]
+    Frontend[Frontend]
+  end
+  subgraph offchain [Off-chain]
+    Backend[Backend API]
+    Indexer[Indexer / Webhooks]
+  end
+  subgraph sdk [SDK]
+    SDKCore[TypeScript SDK]
+  end
+  subgraph chain [On-chain]
+    SSS1[sss-1 Token Program]
+    SSS2[sss-2 Transfer Hook]
+    SSS3[sss-3 Privacy Module]
+    Token2022[Token-2022]
+  end
+  TUI --> Backend
+  CLI --> SDKCore
+  Frontend --> SDKCore
+  Backend --> SDKCore
+  Backend --> Indexer
+  SDKCore --> SSS1
+  SDKCore --> SSS2
+  SDKCore --> SSS3
+  SSS1 --> Token2022
+  SSS2 --> SSS1
+```
+
+- **TUI / Frontend:** Can use the backend (mint/burn/ops via API) or call the SDK with RPC. Backend-driven flows use API key and rate limits; RPC-only uses the SDK with a keypair.
+- **CLI:** Uses the SDK for all on-chain actions; `audit-log` command calls the backend when `BACKEND_URL` is set.
+- **Backend:** Loads stablecoin via SDK, signs with `KEYPAIR_PATH`, and optionally runs an event listener for audit entries.
+
+### Account map
+
+| Account           | Seeds | Purpose |
+| ----------------- | ----- | ------- |
+| StablecoinState   | `["stablecoin", mint]` | Per-mint config: authority, metadata, flags (permanent delegate, transfer hook, default frozen), paused, total_minted, total_burned. |
+| RoleAccount       | `["role", stablecoin, holder]` | Role flags for a holder (minter, burner, pauser, freezer, blacklister, seizer). |
+| MinterInfo        | `["minter", stablecoin, minter]` | Per-minter quota and minted amount. |
+| BlacklistEntry    | `["blacklist", stablecoin, address]` | SSS-2: one PDA per blacklisted address (reason, timestamp). |
+| SupplyCap         | `["supply_cap", stablecoin]` | Optional supply cap (u64); absent or max = no cap. |
+| PrivacyConfig     | `["privacy_config", stablecoin]` | SSS-3: Privacy settings, authority, enabled flag. |
+| AllowlistEntry    | `["allowlist", stablecoin, address]` | SSS-3: Whitelisted address, optional expiry timestamp. |
+| ConfidentialState | `["confidential_state", stablecoin, owner]` | SSS-3: Owner, current encrypted amount. |
+| ExtraAccountMetaList | `["extra-account-metas", mint]` (sss-2 program) | Token-2022 transfer hook: list of extra accounts (sss-1, stablecoin, blacklist PDAs) for every transfer. |
+
+All PDAs above (except ExtraAccountMetaList) use the **sss-1** program ID or **sss-3** program ID as appropriate. ExtraAccountMetaList uses the **sss-2** (transfer hook) program ID.
+
+### Data flows
+
+**Mint path:** Client (CLI/SDK or backend) → SDK `mint(signer, { recipient, amount, minter })` → sss-1 `mint_tokens` (checks role, minter quota, supply cap) → CPI Token-2022 `mint_to`. If SSS-2, transfer hook is not invoked on mint.
+
+**Burn path:** Client → SDK `burn(signer, { amount })` → sss-1 `burn_tokens` (checks burner role) → CPI Token-2022 `burn`.
+
+**Compliance path (SSS-2):**  
+- **Blacklist:** Blacklister → `add_to_blacklist` / `remove_from_blacklist` → BlacklistEntry PDA created/closed.  
+- **Transfer:** Every Token-2022 transfer CPIs sss-2 execute hook → hook reads stablecoin state and source/dest blacklist PDAs → denies if paused or blacklisted.  
+- **Seize:** Seizer → sss-1 `seize` (checks seizer role, stablecoin.is_sss2(), hook program/metas) → CPI Token-2022 transfer_checked with permanent delegate (stablecoin PDA as signer).
+
+**Privacy path (SSS-3):** Client → SDK `privacy_mint` / `privacy_transfer` → sss-3 `confidential_mint` / `confidential_transfer` (checks allowlist and expiry) → records to ConfidentialState.
+
+---
+
 ## 🚀 Quick Start (TypeScript SDK)
-
-### SSS-1: Minimal Stablecoin
-```typescript
-import { SolanaStablecoin } from '@stbr/sss-token';
-
-// Create stablecoin
-const stable = await SolanaStablecoin.create(
-  connection,
-  { preset: "SSS_1", name: "Fast USD", symbol: "fUSD", decimals: 6 },
-  payer
-);
-
-// Mint tokens
-await stable.mint(minterKeypair, {
-  recipient: recipientAddress,
-  amount: 1000_000000n,
-  minter: minterKeypair.publicKey
-});
-```
-
-### SSS-2: Compliant Stablecoin
-```typescript
-// Create with SSS-2 Preset (Enables Compliance)
-const stable = await SolanaStablecoin.create(
-  connection,
-  { preset: "SSS_2", name: "Regulated USD", symbol: "rUSD", decimals: 6 },
-  payer
-);
-
-// Blacklist an address
-await stable.compliance.blacklistAdd(authority, suspiciousAddress, "OFAC");
-
-// Seize tokens from a blacklisted account
-await stable.compliance.seize(authority, frozenAta, treasuryAta);
-```
 
 ### SSS-3: Private Stablecoin
 ```typescript
+import { SolanaStablecoin } from '@stbr/sss-token';
+
 // Create with SSS-3 Preset (Enables Privacy)
 const stable = await SolanaStablecoin.create(
   connection,
@@ -112,19 +152,46 @@ await stable.privacy.confidentialMint(minter, userAddress, 5000_000000n);
 
 ---
 
-## 🏗️ Architecture
+## 🌐 Devnet Deployment
 
-```
-Layer 4 — Presets:     SSS-1 (Minimal)  |  SSS-2 (Compliant)  |  SSS-3 (Private)
-Layer 3 — Modules:     Privacy (allowlist, confidential mints) | Compliance (transfer hook, blacklist)
-Layer 2 — Extensions:  Token-2022 (Permanent Delegate, Transfer Hook)
-Layer 1 — Base SDK:    Core stablecoin operations (mint, burn, RBAC)
-```
+The SSS programs are deployed on **Solana Devnet**.
 
-- **Layer 1 (Base):** Core logic, role-based access control (minters, burners, freezers).
-- **Layer 2 (Extensions):** Leverages Solana's Token-2022 for native-speed enforcement.
-- **Layer 3 (Advanced Modules):** Blacklist + seizure (SSS-2), or the new Privacy Module (SSS-3).
-- **Layer 4 (Presets):** High-level abstractions for one-click deployment.
+### Program IDs (Devnet)
+
+| Program   | Address | Explorer |
+|-----------|---------|----------|
+| **SSS Token (sss-1)** | `47TNsKC1iJvLTKYRMbfYjrod4a56YE1f4qv73hZkdWUZ` | [View](https://explorer.solana.com/address/47TNsKC1iJvLTKYRMbfYjrod4a56YE1f4qv73hZkdWUZ?cluster=devnet) |
+| **Transfer Hook (sss-2)** | `8DMsf39fGWfcrWVjfyEq8fqZf5YcTvVPGgdJr8s2S8Nc` | [View](https://explorer.solana.com/address/8DMsf39fGWfcrWVjfyEq8fqZf5YcTvVPGgdJr8s2S8Nc?cluster=devnet) |
+| **Privacy Module (sss-3)** | `XSwLYVBfmBKaWKYF6fTcCng9DSRREArLQE1Cts32NkM` | [View](https://explorer.solana.com/address/XSwLYVBfmBKaWKYF6fTcCng9DSRREArLQE1Cts32NkM?cluster=devnet) |
+
+### Devnet walkthrough (copy-paste)
+
+```bash
+# 1. Build and set cluster
+anchor build && pnpm run build:sdk
+solana config set --url devnet
+solana airdrop 2
+
+# 2. Deploy (if using your own program IDs, run scripts/upgrade-program-id.sh first)
+anchor deploy --provider.cluster devnet
+
+# 3. SSS-1: init and mint
+pnpm run cli init --preset sss-1 -n "Dev USD" -s DUSD --uri "https://example.com"
+# Set MINT_1 to the printed mint address
+pnpm run cli -m <MINT_1> mint $(solana address) 1000000
+
+# 4. SSS-2: init, mint, one compliance action
+pnpm run cli init --preset sss-2 -n "Reg USD" -s RUSD --uri ""
+# Set MINT_2 to the printed mint; grant blacklister role then:
+pnpm run cli -m <MINT_2> blacklist add <SOME_ADDRESS> --reason "Test"
+
+# 5. SSS-3: init, allowlist, confidential mint
+pnpm run cli init --preset sss-3 -n "Priv USD" -s PUSD --uri "https://example.com"
+# Set MINT_3 to the printed mint, then:
+pnpm run cli -m <MINT_3> privacy-init
+pnpm run cli -m <MINT_3> privacy-allow $(solana address)
+pnpm run cli -m <MINT_3> privacy-mint <RECIPIENT> 1000000
+```
 
 ---
 
@@ -184,11 +251,21 @@ sss-token privacy-mint <ADDR> <AMOUNT>
 
 ---
 
+## 📚 Documentation Links
+
+- [**SSS-1: Minimal Stablecoin**](./docs/SSS-1.md)
+- [**SSS-2: Compliant Stablecoin**](./docs/SSS-2.md)
+- [**SSS-3: Privacy Extension**](./docs/SSS-3.md)
+- [**Devnet Deployment Guide**](./docs/DEVNET.md)
+- [**Architecture Overview**](./docs/ARCH.md)
+- [**On-chain Specification**](./docs/SPEC.md)
+- [**Backend API Reference**](./docs/API.md)
+
+---
+
 ## 📄 License
 
 ISC License — see [LICENSE](./LICENSE) for details.
 
----
 
-**Last Updated:** March 2026  
-**Status:** Production Ready (Devnet) | Mainnet: Pending Deployment
+# Developed with love by BUGHACKER(luckysitara)

@@ -51,3 +51,12 @@ SSS-1 does not have blacklist or seize; calling those on an SSS-1 mint is a conf
 ## Initialization
 
 Use preset `SSS_1` or `extensions: { enablePermanentDelegate: false, enableTransferHook: false, defaultAccountFrozen: false }`. After init, the stablecoin cannot be upgraded to SSS-2 (flags are immutable).
+
+---
+
+## Related Documentation
+- [**SSS-2: Compliant Stablecoin**](./SSS-2.md)
+- [**SSS-3: Privacy Extension**](./SSS-3.md)
+- [**Architecture Overview**](./ARCH.md)
+- [**On-chain Specification**](./SPEC.md)
+- [**Devnet Deployment Guide**](./DEVNET.md)

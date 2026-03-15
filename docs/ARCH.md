@@ -23,6 +23,7 @@ flowchart TB
   subgraph chain [On-chain]
     SSS1[sss-1 Token Program]
     SSS2[sss-2 Transfer Hook]
+    SSS3[sss-3 Privacy Module]
     Token2022[Token-2022]
   end
   TUI --> Backend
@@ -32,6 +33,7 @@ flowchart TB
   Backend --> Indexer
   SDKCore --> SSS1
   SDKCore --> SSS2
+  SDKCore --> SSS3
   SSS1 --> Token2022
   SSS2 --> SSS1
 ```
@@ -51,9 +53,12 @@ flowchart TB
 | MinterInfo        | `["minter", stablecoin, minter]` | Per-minter quota and minted amount. |
 | BlacklistEntry    | `["blacklist", stablecoin, address]` | SSS-2: one PDA per blacklisted address (reason, timestamp). |
 | SupplyCap         | `["supply_cap", stablecoin]` | Optional supply cap (u64); absent or max = no cap. |
+| PrivacyConfig     | `["privacy_config", stablecoin]` | SSS-3: Privacy settings, authority, enabled flag. |
+| AllowlistEntry    | `["allowlist", stablecoin, address]` | SSS-3: Whitelisted address, optional expiry timestamp. |
+| ConfidentialState | `["confidential_state", stablecoin, owner]` | SSS-3: Owner, current encrypted amount. |
 | ExtraAccountMetaList | `["extra-account-metas", mint]` (sss-2 program) | Token-2022 transfer hook: list of extra accounts (sss-1, stablecoin, blacklist PDAs) for every transfer. |
 
-All PDAs above (except ExtraAccountMetaList) use the **sss-1** program ID. ExtraAccountMetaList uses the **sss-2** (transfer hook) program ID.
+All PDAs above (except ExtraAccountMetaList) use the **sss-1** program ID or **sss-3** program ID as appropriate. ExtraAccountMetaList uses the **sss-2** (transfer hook) program ID.
 
 ---
 
@@ -67,6 +72,8 @@ All PDAs above (except ExtraAccountMetaList) use the **sss-1** program ID. Extra
 - **Blacklist:** Blacklister → `add_to_blacklist` / `remove_from_blacklist` → BlacklistEntry PDA created/closed.  
 - **Transfer:** Every Token-2022 transfer CPIs sss-2 execute hook → hook reads stablecoin state and source/dest blacklist PDAs → denies if paused or blacklisted.  
 - **Seize:** Seizer → sss-1 `seize` (checks seizer role, stablecoin.is_sss2(), hook program/metas) → CPI Token-2022 transfer_checked with permanent delegate (stablecoin PDA as signer).
+
+**Privacy path (SSS-3):** Client → SDK `privacy_mint` / `privacy_transfer` → sss-3 `confidential_mint` / `confidential_transfer` (checks allowlist and expiry) → records to ConfidentialState.
 
 ---
 

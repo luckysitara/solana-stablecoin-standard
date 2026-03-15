@@ -45,3 +45,12 @@ Transfer hook (sss-2 program) `execute` runs on every transfer and denies if pau
 - **ComplianceNotEnabled (6002):** `add_to_blacklist`, `remove_from_blacklist`, or `seize` called on a stablecoin that was not initialized with compliance (e.g. SSS-1). The program checks `enable_permanent_delegate` and `enable_transfer_hook`; both must be true.
 - **AlreadyBlacklisted (6003) / NotBlacklisted (6004):** Add when already listed, or remove when not listed.
 - **Blacklisted (6011):** Transfer hook denies transfer when source or destination is blacklisted.
+
+---
+
+## Related Documentation
+- [**SSS-1: Minimal Stablecoin**](./SSS-1.md)
+- [**SSS-3: Privacy Extension**](./SSS-3.md)
+- [**Architecture Overview**](./ARCH.md)
+- [**On-chain Specification**](./SPEC.md)
+- [**Devnet Deployment Guide**](./DEVNET.md)
