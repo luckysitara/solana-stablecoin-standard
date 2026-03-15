@@ -1,3 +1,4 @@
+#![allow(ambiguous_glob_reexports)]
 pub mod constants;
 pub mod enums;
 pub mod error;
@@ -24,25 +25,25 @@ pub mod sss_3 {
         privacy_enabled: bool,
         min_allowlist_size: u32,
     ) -> Result<()> {
-        initialize_privacy_config::initialize_privacy_config(ctx, privacy_enabled, min_allowlist_size)
+        ctx.accounts.initialize_privacy_config(privacy_enabled, min_allowlist_size, &ctx.bumps)
     }
 
     pub fn add_to_allowlist(
         ctx: Context<AddToAllowlist>,
         expiry_slot: Option<u64>,
     ) -> Result<()> {
-        add_to_allowlist::add_to_allowlist(ctx, expiry_slot)
+        ctx.accounts.add_to_allowlist(expiry_slot, &ctx.bumps)
     }
 
     pub fn remove_from_allowlist(ctx: Context<RemoveFromAllowlist>) -> Result<()> {
-        remove_from_allowlist::remove_from_allowlist(ctx)
+        ctx.accounts.remove_from_allowlist()
     }
 
     pub fn confidential_mint(
         ctx: Context<ConfidentialMint>,
         amount: u64,
     ) -> Result<()> {
-        confidential_mint::confidential_mint(ctx, amount)
+        ctx.accounts.confidential_mint(amount, &ctx.bumps)
     }
 
     pub fn confidential_transfer(
@@ -50,7 +51,7 @@ pub mod sss_3 {
         amount: u64,
         recipient: Pubkey,
     ) -> Result<()> {
-        confidential_transfer::confidential_transfer(ctx, amount, recipient)
+        ctx.accounts.confidential_transfer(amount, recipient, &ctx.bumps)
     }
 }
 

@@ -28,40 +28,42 @@ pub struct RemoveFromAllowlist<'info> {
     pub allowlist_entry: Account<'info, AllowlistEntry>,
 }
 
-pub fn remove_from_allowlist(
-    ctx: Context<RemoveFromAllowlist>,
-) -> Result<()> {
-    let privacy_config = &mut ctx.accounts.privacy_config;
+impl<'info> RemoveFromAllowlist<'info> {
+    pub fn remove_from_allowlist(
+        &mut self,
+    ) -> Result<()> {
+        let privacy_config = &mut self.privacy_config;
 
-    require_eq!(
-        privacy_config.authority,
-        ctx.accounts.authority.key(),
-        PrivacyError::InsufficientPermissions
-    );
+        require_eq!(
+            privacy_config.authority,
+            self.authority.key(),
+            PrivacyError::InsufficientPermissions
+        );
 
-    let entry = &mut ctx.accounts.allowlist_entry;
+        let entry = &mut self.allowlist_entry;
 
-    require_eq!(
-        entry.status,
-        AllowlistStatus::Active,
-        PrivacyError::AllowlistEntryNotFound
-    );
+        require_eq!(
+            entry.status,
+            AllowlistStatus::Active,
+            PrivacyError::AllowlistEntryNotFound
+        );
 
-    entry.status = AllowlistStatus::Revoked;
+        entry.status = AllowlistStatus::Revoked;
 
-    if privacy_config.active_allowlist_entries > 0 {
-        privacy_config.active_allowlist_entries -= 1;
+        if privacy_config.active_allowlist_entries > 0 {
+            privacy_config.active_allowlist_entries -= 1;
+        }
+
+        privacy_config.last_updated_slot = Clock::get()?.slot;
+
+        emit!(AllowlistEntryRemoved {
+            stablecoin: privacy_config.stablecoin,
+            address: entry.address,
+            removed_by: self.authority.key(),
+            reason: "Revoked by authority".to_string(),
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
     }
-
-    privacy_config.last_updated_slot = Clock::get()?.slot;
-
-    emit!(AllowlistEntryRemoved {
-        stablecoin: privacy_config.stablecoin,
-        address: entry.address,
-        removed_by: ctx.accounts.authority.key(),
-        reason: "Revoked by authority".to_string(),
-        timestamp: Clock::get()?.unix_timestamp,
-    });
-
-    Ok(())
 }

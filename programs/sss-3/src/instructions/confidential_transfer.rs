@@ -49,58 +49,62 @@ pub struct ConfidentialTransfer<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn confidential_transfer(
-    ctx: Context<ConfidentialTransfer>,
-    amount: u64,
-    _recipient: Pubkey,
-) -> Result<()> {
-    let privacy_config = &mut ctx.accounts.privacy_config;
+impl<'info> ConfidentialTransfer<'info> {
+    pub fn confidential_transfer(
+        &mut self,
+        amount: u64,
+        _recipient: Pubkey,
+        bumps: &ConfidentialTransferBumps,
+    ) -> Result<()> {
+        let privacy_config = &mut self.privacy_config;
 
-    // Verify privacy is enabled
-    require!(
-        privacy_config.privacy_enabled,
-        PrivacyError::PrivacyNotEnabled
-    );
+        // Verify privacy is enabled
+        require!(
+            privacy_config.privacy_enabled,
+            PrivacyError::PrivacyNotEnabled
+        );
 
-    let current_slot = Clock::get()?.slot;
+        let current_slot = Clock::get()?.slot;
 
-    // Verify sender is on allowlist and valid
-    let sender_allowlist = &ctx.accounts.sender_allowlist;
-    require!(
-        sender_allowlist.is_valid(current_slot),
-        PrivacyError::NotOnAllowlist
-    );
+        // Verify sender is on allowlist and valid
+        let sender_allowlist = &self.sender_allowlist;
+        require!(
+            sender_allowlist.is_valid(current_slot),
+            PrivacyError::NotOnAllowlist
+        );
 
-    // Verify recipient is on allowlist and valid
-    let recipient_allowlist = &ctx.accounts.recipient_allowlist;
-    require!(
-        recipient_allowlist.is_valid(current_slot),
-        PrivacyError::NotOnAllowlist
-    );
+        // Verify recipient is on allowlist and valid
+        let recipient_allowlist = &self.recipient_allowlist;
+        require!(
+            recipient_allowlist.is_valid(current_slot),
+            PrivacyError::NotOnAllowlist
+        );
 
-    require!(
-        ctx.accounts.recipient_pubkey.key() != ctx.accounts.sender.key(),
-        PrivacyError::InvalidRecipient
-    );
+        require!(
+            self.recipient_pubkey.key() != self.sender.key(),
+            PrivacyError::InvalidRecipient
+        );
 
-    require!(amount > 0, PrivacyError::ZeroAmount);
+        require!(amount > 0, PrivacyError::ZeroAmount);
 
-    // Record confidential state for recipient
-    let confidential_state = &mut ctx.accounts.confidential_state;
-    confidential_state.stablecoin = privacy_config.stablecoin;
-    confidential_state.recipient = ctx.accounts.recipient_pubkey.key();
-    confidential_state.record_transfer(amount, current_slot);
+        // Record confidential state for recipient
+        let confidential_state = &mut self.confidential_state;
+        confidential_state.stablecoin = privacy_config.stablecoin;
+        confidential_state.recipient = self.recipient_pubkey.key();
+        confidential_state.record_transfer(amount, current_slot);
+        confidential_state.bump = bumps.confidential_state;
 
-    privacy_config.total_confidential_transfers += 1;
-    privacy_config.last_updated_slot = current_slot;
+        privacy_config.total_confidential_transfers += 1;
+        privacy_config.last_updated_slot = current_slot;
 
-    emit!(ConfidentialTransferred {
-        stablecoin: privacy_config.stablecoin,
-        sender: ctx.accounts.sender.key(),
-        recipient: ctx.accounts.recipient_pubkey.key(),
-        amount,
-        timestamp: Clock::get()?.unix_timestamp,
-    });
+        emit!(ConfidentialTransferred {
+            stablecoin: privacy_config.stablecoin,
+            sender: self.sender.key(),
+            recipient: self.recipient_pubkey.key(),
+            amount,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
 
-    Ok(())
+        Ok(())
+    }
 }
