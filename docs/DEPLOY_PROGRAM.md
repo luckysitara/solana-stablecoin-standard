@@ -28,7 +28,7 @@ node --version
 ## 1. Clone and setup
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/luckysitara/solana-stablecoin-standard.git
 cd solana-stablecoin-standard
 pnpm install
 ```
