@@ -119,6 +119,8 @@ Use the CLI or SDK to create a stablecoin (see [INTEGRATION.md](INTEGRATION.md) 
 pnpm run cli init --preset sss-1 -n "My USD" -s MUSD --uri "https://example.com"
 # Or sss-2 for compliant preset
 pnpm run cli init --preset sss-2 -n "Regulated USD" -s RUSD --uri "https://example.com"
+pnpm run cli init --preset sss-3 -n "Regulated USD" -s RUSD --uri "https://example.com"
+
 ```
 
 Verify on Explorer: open the mint address and confirm the stablecoin state account exists.
