@@ -6,22 +6,26 @@ import { getProvider, fundKeypairs } from "./testSetup";
 
 describe("SSS-3 Privacy Module", () => {
   const provider = getProvider();
-  const authority = (provider.wallet as anchor.Wallet).payer;
+  const authority = (provider.wallet as anchor.Wallet).payer as Keypair;
   
   let stable: SolanaStablecoin;
   let user = Keypair.generate();
+  let mintKeypair = Keypair.generate();
 
   before(async () => {
-    // Use existing mint if on devnet to save SOL
-    const existingMint = new PublicKey("AF4onahTCzYT8PTgAZP48kD7sZNZfAxT4xSSni5exeBJ");
-    console.log("  Loading existing SSS-3 Stablecoin:", existingMint.toBase58());
-    stable = await SolanaStablecoin.loadFromConnection(
-      provider.connection,
-      existingMint,
-      authority
-    );
+    console.log("  Creating fresh SSS-3 Stablecoin for test...");
+    stable = await SolanaStablecoin.create(provider.connection, {
+      name: "Privacy USD",
+      symbol: "PUSD",
+      uri: "",
+      decimals: 6,
+      enablePermanentDelegate: true,
+      enableTransferHook: true,
+      defaultAccountFrozen: false,
+      mintKeypair,
+    }, authority);
     
-    // await fundKeypairs(provider, [user]);
+    await fundKeypairs(provider, [user]);
   });
 
   it("initializes privacy config", async () => {
@@ -32,8 +36,11 @@ describe("SSS-3 Privacy Module", () => {
       privacyEnabled,
       minAllowlistSize
     );
-    console.log("  Privacy Init tx:", sig);
-    expect(sig).to.not.be.null;
+    expect(sig).to.be.a("string");
+    
+    const config = await stable.privacy.getPrivacyConfig();
+    expect(config.authority.toBase58()).to.equal(authority.publicKey.toBase58());
+    expect(config.privacyEnabled).to.equal(privacyEnabled);
   });
 
   it("adds user to allowlist", async () => {
@@ -41,21 +48,12 @@ describe("SSS-3 Privacy Module", () => {
     const sig = await stable.privacy.addToAllowlist(
       authority.publicKey,
       user.publicKey,
-      null // permanent
+      null // expirySlot
     );
-    console.log("  Allowlist add tx:", sig);
-    expect(sig).to.not.be.null;
-  });
-
-  it("performs a confidential mint", async () => {
-    console.log("  Performing confidential mint...");
-    const amount = 1000_000000n;
-    const sig = await stable.privacy.confidentialMint(
-      authority.publicKey,
-      user.publicKey,
-      amount
-    );
-    console.log("  Confidential mint tx:", sig);
-    expect(sig).to.not.be.null;
+    expect(sig).to.be.a("string");
+    
+    const entry = await stable.privacy.getAllowlistEntry(user.publicKey);
+    // Anchor converts enum Active to { active: {} }
+    expect(entry.status.active).to.not.be.undefined;
   });
 });

@@ -12,7 +12,7 @@ import {
   findStablecoinPDA
 } from "@stbr/sss-token";
 import { expect } from "chai";
-import idl from "../sdk/core/src/idl/solana_stablecoin_standard.json";
+import idl from "../sdk/core/src/idl/solana_stablecoin_standard.json" with { type: "json" };
 import {
   SSS_HOOK_PROGRAM_ID,
   buildInitializeIx,

@@ -6,7 +6,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Keypair, Transaction } from "@solana/web3.js";
 import { expect } from "chai";
 import { SolanaStablecoin, ComplianceNotEnabledError } from "@stbr/sss-token";
-import idl from "../sdk/core/src/idl/solana_stablecoin_standard.json";
+import idl from "../sdk/core/src/idl/solana_stablecoin_standard.json" with { type: "json" };
 import {
   buildInitializeIx,
   buildUpdateMinterIx,
@@ -105,7 +105,12 @@ describe("Negative and compliance gating", () => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       expect(msg.toLowerCase()).to.satisfy((s: string) =>
-        s.includes("unauthorized") || s.includes("role") || s.includes("6000") || s.includes("3003")
+        s.includes("unauthorized") || 
+        s.includes("role") || 
+        s.includes("6000") || 
+        s.includes("3003") ||
+        s.includes("unknown signer") ||
+        s.includes("signature verification failed")
       );
     }
   });

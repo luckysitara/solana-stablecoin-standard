@@ -10,8 +10,8 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import * as crypto from "crypto";
-import idlSssToken from "../sdk/core/src/idl/solana_stablecoin_standard.json";
-import idlSssHook from "../sdk/core/src/idl/sss_transfer_hook.json";
+import idlSssToken from "../sdk/core/src/idl/solana_stablecoin_standard.json" with { type: "json" };
+import idlSssHook from "../sdk/core/src/idl/sss_transfer_hook.json" with { type: "json" };
 
 export const SSS_TOKEN_PROGRAM_ID = new PublicKey(
   (idlSssToken as { address: string }).address

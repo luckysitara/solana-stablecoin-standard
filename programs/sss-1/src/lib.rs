@@ -13,7 +13,7 @@ pub use events::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("H4s8jGdoERM4tury5EBfk9Y2v6Gjt1i6hdd2PbxGZwzE");
+declare_id!("47TNsKC1iJvLTKYRMbfYjrod4a56YE1f4qv73hZkdWUZ");
 
 #[cfg(test)]
 mod tests {

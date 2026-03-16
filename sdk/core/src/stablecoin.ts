@@ -1,14 +1,15 @@
 import { Program, AnchorProvider, BN } from "@coral-xyz/anchor";
 import type { Idl } from "@coral-xyz/anchor";
-import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import {
   getAssociatedTokenAddressSync,
   getAccount,
   createAssociatedTokenAccountInstruction,
+  TOKEN_2022_PROGRAM_ID as SPL_TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
-import idl from "./idl/solana_stablecoin_standard.json";
-import hookIdl from "./idl/sss_transfer_hook.json";
-import privacyIdl from "./idl/sss_privacy.json";
+import idl from "./idl/solana_stablecoin_standard.json" with { type: "json" };
+import hookIdl from "./idl/sss_transfer_hook.json" with { type: "json" };
+import privacyIdl from "./idl/sss_privacy.json" with { type: "json" };
 import {
   SSS_TOKEN_PROGRAM_ID,
   SSS_HOOK_PROGRAM_ID,
@@ -34,10 +35,11 @@ import { ComplianceNotEnabledError } from "./errors";
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
   "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 );
-const SYSTEM_PROGRAM_ID = new PublicKey("11111111111111111111111111111111");
+const SYSTEM_PROGRAM_ID = SystemProgram.programId;
+const SYSVAR_RENT_PUBKEY = new PublicKey("SysvarRent111111111111111111111111111111111");
 
 type SSSIDL = typeof idl;
-type SSSProgram = Program;
+type SSSProgram = Program<SSSIDL>;
 
 export interface StablecoinState {
   authority: PublicKey;
@@ -174,7 +176,7 @@ export class SolanaStablecoin {
     }
 
     const initParams = normalizeInitializeParams(params);
-    const mintKeypair = Keypair.generate();
+    const mintKeypair = params.mintKeypair ?? Keypair.generate();
     const mintPk = mintKeypair.publicKey;
     const [stablecoinPda] = findStablecoinPDA(mintPk, program.programId);
     const [authorityRolePda] = findRolePDA(stablecoinPda, authority, program.programId);
@@ -764,9 +766,29 @@ export class SolanaStablecoin {
           stablecoin: this.stablecoin,
           privacyConfig,
           systemProgram: SYSTEM_PROGRAM_ID,
-          rent: new PublicKey("SysvarRent111111111111111111111111111111111"),
+          rent: SYSVAR_RENT_PUBKEY,
         })
         .rpc();
+    },
+
+    getPrivacyConfig: async (): Promise<any> => {
+      const [privacyConfig] = findPrivacyConfigPDA(this.stablecoin);
+      const { Program: AnchorProgram } = await import("@coral-xyz/anchor");
+      const privacyProgram = new AnchorProgram(
+        privacyIdl as unknown as Idl,
+        this.provider
+      ) as Program;
+      return (privacyProgram.account as any).privacyConfig.fetch(privacyConfig);
+    },
+
+    getAllowlistEntry: async (address: PublicKey): Promise<any> => {
+      const [allowlistEntry] = findAllowlistEntryPDA(this.stablecoin, address);
+      const { Program: AnchorProgram } = await import("@coral-xyz/anchor");
+      const privacyProgram = new AnchorProgram(
+        privacyIdl as unknown as Idl,
+        this.provider
+      ) as Program;
+      return (privacyProgram.account as any).allowlistEntry.fetch(allowlistEntry);
     },
 
     addToAllowlist: async (
@@ -790,7 +812,7 @@ export class SolanaStablecoin {
           addressToAdd,
           allowlistEntry,
           systemProgram: SYSTEM_PROGRAM_ID,
-          rent: new PublicKey("SysvarRent111111111111111111111111111111111"),
+          rent: SYSVAR_RENT_PUBKEY,
         })
         .rpc();
     },
